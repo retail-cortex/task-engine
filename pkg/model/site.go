@@ -16,6 +16,8 @@ type Site struct {
 	AltitudeMeters float64    `gorm:"type:decimal(8,2);not null;default:0.0"` // Elevation above sea level
 	ICAOCode       string     `gorm:"type:varchar(10);not null;default:''"`   // Weather/Airport reporting station (e.g. KSFO)
 	TimeZone       string     `gorm:"type:varchar(50);not null;default:'UTC'"`
+	ICAO           *ICAOCode  `gorm:"foreignKey:ICAOCode;references:ICAO;constraint:-"`
+	TZ             *TimeZone  `gorm:"foreignKey:TimeZone;references:Name;constraint:-"`
 	Metadata       JSONB      `gorm:"type:jsonb;not null;default:'{}'"`
 	CreatedAt      time.Time  `gorm:"not null;default:now()"`
 	UpdatedAt      time.Time  `gorm:"not null;default:now()"`
