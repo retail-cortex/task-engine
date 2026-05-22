@@ -1,0 +1,33 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "api",
+    srcs = [
+        "admin.go",
+        "mcp.go",
+        "middleware.go",
+        "operational.go",
+        "server.go",
+    ],
+    importpath = "github.com/rmcguinness/gemini_task_engine/pkg/api",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/agents",
+        "//pkg/model",
+        "//pkg/service",
+        "@com_github_gin_gonic_gin//:gin",
+        "@com_github_metoro_io_mcp_golang//:mcp-golang",
+        "@com_github_metoro_io_mcp_golang//transport/http",
+    ],
+)
+
+go_test(
+    name = "api_test",
+    srcs = ["server_test.go"],
+    deps = [
+        ":api",
+        "//pkg/model",
+        "@com_github_gin_gonic_gin//:gin",
+        "@com_github_stretchr_testify//assert",
+    ],
+)

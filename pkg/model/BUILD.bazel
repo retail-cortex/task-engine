@@ -1,0 +1,30 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "model",
+    srcs = [
+        "asset.go",
+        "availability.go",
+        "event.go",
+        "execution.go",
+        "hooks.go",
+        "location.go",
+        "organization.go",
+        "session.go",
+        "site.go",
+        "sop.go",
+        "task.go",
+        "types.go",
+        "user.go",
+    ],
+    importpath = "github.com/rmcguinness/gemini_task_engine/pkg/model",
+    visibility = ["//visibility:public"],
+    deps = ["@io_gorm_gorm//:gorm"],
+)
+
+go_test(
+    name = "model_test",
+    srcs = ["types_test.go"],
+    embed = [":model"],
+    deps = ["@com_github_stretchr_testify//assert"],
+)

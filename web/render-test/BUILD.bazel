@@ -1,0 +1,46 @@
+load("@npm//:defs.bzl", "npm_link_all_packages")
+load("@npm//:vite/package_json.bzl", vite_bin = "bin")
+
+# Links all NPM packages in this package context
+npm_link_all_packages(name = "node_modules")
+
+# Hermetic Vite build step
+vite_bin.vite(
+    name = "build",
+    srcs = [
+        "index.html",
+        "package.json",
+        "tsconfig.app.json",
+        "tsconfig.json",
+        "tsconfig.node.json",
+        "vite.config.ts",
+        ":node_modules",
+    ] + glob([
+        "public/**/*",
+        "src/**/*",
+    ]),
+    args = ["build"],
+    chdir = package_name(),
+    out_dirs = ["dist"],
+    visibility = ["//visibility:public"],
+)
+
+# Development server target
+vite_bin.vite_binary(
+    name = "dev",
+    args = ["dev"],
+    chdir = package_name(),
+    data = [
+        "index.html",
+        "package.json",
+        "tsconfig.app.json",
+        "tsconfig.json",
+        "tsconfig.node.json",
+        "vite.config.ts",
+        ":node_modules",
+    ] + glob([
+        "public/**/*",
+        "src/**/*",
+    ]),
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,9 @@
+# Modern Bazel configuration
+common --enable_bzlmod
+
+# Informative outputs
+build --show_timestamps
+build --verbose_failures
+
+# Ensure we use platform-native toolchains
+build --incompatible_enable_cc_toolchain_resolution

@@ -1,0 +1,3 @@
+packages:
+  - 'web/console'
+  - 'web/render-test'

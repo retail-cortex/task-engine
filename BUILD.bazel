@@ -1,0 +1,26 @@
+load("@gazelle//:def.bzl", "gazelle")
+load("@npm//:defs.bzl", "npm_link_all_packages")
+load("@rules_multirun//:defs.bzl", "multirun")
+
+# Link all node packages at the root of the monorepo
+npm_link_all_packages(name = "node_modules")
+
+# Gazelle Go rule generator settings
+# gazelle:prefix github.com/rmcguinness/gemini_task_engine
+# gazelle:resolve go github.com/rrmcguinness/modenv/pkg/modenv @modenv//pkg/modenv
+gazelle(name = "gazelle")
+
+multirun(
+    name = "dev_server",
+    commands = [
+        "//cmd/server",
+        "//web/console:dev",
+        "//web/render-test:dev",
+    ],
+    jobs = 0,  # Run concurrently
+)
+
+alias(
+    name = "modenv",
+    actual = "@modenv//cmd/modenv",
+)

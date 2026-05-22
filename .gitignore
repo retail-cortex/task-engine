@@ -1,0 +1,36 @@
+# OS Metadata
+.DS_Store
+Thumbs.db
+
+# Bazel
+bazel-*
+.bazelignore.user
+
+# Go
+*.o
+*.a
+*.so
+*.exe
+*.test
+*.prof
+/dist/
+bin/
+
+# Node / JS / NextJS
+node_modules/
+.next/
+dist/
+build/
+.npm
+.eslintcache
+.parcel-cache
+.cache/
+.pnpm-debug.log*
+
+# Environment Configurations
+.env.local.toml
+.env.local
+.env.*.local
+*.local.toml
+
+scratch

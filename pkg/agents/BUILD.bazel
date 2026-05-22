@@ -1,0 +1,8 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "agents",
+    srcs = ["agents.go"],
+    importpath = "github.com/rmcguinness/gemini_task_engine/pkg/agents",
+    visibility = ["//visibility:public"],
+)

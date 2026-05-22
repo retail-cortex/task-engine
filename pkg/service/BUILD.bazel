@@ -1,0 +1,28 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "service",
+    srcs = [
+        "admin.go",
+        "rag.go",
+        "shift.go",
+        "task.go",
+    ],
+    importpath = "github.com/rmcguinness/gemini_task_engine/pkg/service",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/model",
+        "//pkg/persistence",
+    ],
+)
+
+go_test(
+    name = "service_test",
+    srcs = ["shift_test.go"],
+    embed = [":service"],
+    deps = [
+        "//pkg/model",
+        "//pkg/persistence",
+        "@com_github_stretchr_testify//assert",
+    ],
+)

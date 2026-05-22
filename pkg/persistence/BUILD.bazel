@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "persistence",
+    srcs = [
+        "db.go",
+        "repositories.go",
+    ],
+    importpath = "github.com/rmcguinness/gemini_task_engine/pkg/persistence",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/model",
+        "@com_github_jackc_pgx_v5//:pgx",
+        "@com_github_jackc_pgx_v5//stdlib",
+        "@com_google_cloud_go_alloydbconn//:alloydbconn",
+        "@io_gorm_driver_postgres//:postgres",
+        "@io_gorm_gorm//:gorm",
+    ],
+)
