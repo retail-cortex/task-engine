@@ -2,6 +2,7 @@ baseURL = "/"
 locale = "en-us"
 title = "Enterprise Task Engine"
 theme = "hugo_book"
+relativeURLs = true
 
 [params]
   # Configure Hugo Book visual layout options
