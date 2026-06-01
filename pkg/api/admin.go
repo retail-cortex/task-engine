@@ -1,3 +1,17 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package api
 
 import (
@@ -9,11 +23,15 @@ import (
 )
 
 type AdminHandler struct {
-	adminService service.AdminService
+	adminService     service.AdminService
+	schedulerService service.SchedulerService
 }
 
-func NewAdminHandler(adminService service.AdminService) *AdminHandler {
-	return &AdminHandler{adminService: adminService}
+func NewAdminHandler(adminService service.AdminService, schedulerService service.SchedulerService) *AdminHandler {
+	return &AdminHandler{
+		adminService:     adminService,
+		schedulerService: schedulerService,
+	}
 }
 
 func (h *AdminHandler) ListUsers(c *gin.Context) {
@@ -158,4 +176,18 @@ func (h *AdminHandler) CreateTaskTemplate(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, task)
+}
+
+func (h *AdminHandler) TriggerSchedulerSweep(c *gin.Context) {
+	err := h.schedulerService.ForceTriggerBatchSweep(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Scheduled batch sweeps materialized successfully."})
+}
+
+func (h *AdminHandler) GetSchedulerStatus(c *gin.Context) {
+	status := h.schedulerService.GetStatus()
+	c.JSON(http.StatusOK, status)
 }

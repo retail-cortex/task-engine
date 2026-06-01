@@ -34,3 +34,10 @@ build/
 *.local.toml
 
 scratch
+
+# Terraform local credentials and state registries
+*passwords_registry.csv
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl

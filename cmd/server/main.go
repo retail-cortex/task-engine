@@ -1,6 +1,21 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -10,20 +25,21 @@ import (
 	"github.com/rrmcguinness/modenv/pkg/modenv"
 )
 
-// AppConfig represents the root hierarchical configuration.
-type AppConfig struct {
-	Persistence persistence.DBConfig `toml:"persistence"`
-	Server      api.Config           `toml:"server"`
+// ServerConfig represents the root hierarchical configuration.
+type ServerConfig struct {
+	Persistence persistence.DBConfig    `toml:"persistence"`
+	Server      api.Config              `toml:"server"`
+	Scheduler   service.SchedulerConfig `toml:"scheduler"`
 }
 
 func main() {
 	log.Printf("Loading environment configurations using modenv...")
-	var cfg AppConfig
+	var cfg ServerConfig
 	cloneCfg, err := modenv.Load(&cfg)
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
-	appConfig := cloneCfg.(*AppConfig)
+	appConfig := cloneCfg.(*ServerConfig)
 
 	// Keep backward compatibility for DB_CONNECTION_STRING environment override
 	if envConn := os.Getenv("DB_CONNECTION_STRING"); envConn != "" {
@@ -49,10 +65,19 @@ func main() {
 	adminService := service.NewAdminService(userRepo, orgRepo, siteRepo, taskRepo)
 	taskService := service.NewTaskService(execRepo, siteRepo)
 	shiftService := service.NewShiftService(sessionRepo, userRepo)
-	ragService := service.NewRAGService(sopRepo)
+	embeddingGen := service.NewDefaultEmbeddingGenerator()
+	ragService := service.NewRAGService(sopRepo, embeddingGen)
+	automationService := service.NewAutomationService(execRepo, taskRepo, siteRepo, userRepo, sopRepo, embeddingGen)
+	schedulerService := service.NewSchedulerServiceWithConfig(db, ragService, taskService, automationService, appConfig.Scheduler)
+
+	// Start distributed scheduler daemon loops before booting HTTP server
+	if err := schedulerService.Start(context.Background()); err != nil {
+		log.Fatalf("Failed to bootstrap distributed scheduler daemon: %v", err)
+	}
+	defer schedulerService.Stop()
 
 	log.Printf("Core services instantiated. Initializing Gin base server with MCP capabilities...")
-	srv, err := api.NewServer(appConfig.Server, adminService, taskService, shiftService, ragService)
+	srv, err := api.NewServer(appConfig.Server, adminService, taskService, shiftService, ragService, automationService, schedulerService, db)
 	if err != nil {
 		log.Fatalf("Failed to initialize Gin server: %v", err)
 	}

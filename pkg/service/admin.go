@@ -1,3 +1,17 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package service
 
 import (
@@ -19,6 +33,7 @@ type AdminService interface {
 	RegisterAsset(ctx context.Context, asset *model.Asset) error
 	CreateTaskTemplate(ctx context.Context, task *model.Task) error
 	ListUsers(ctx context.Context) ([]*model.User, error)
+	FindUserByOAuth(ctx context.Context, provider, oauthID string) (*model.User, error)
 	CreateRole(ctx context.Context, role *model.Role) error
 	ListRoles(ctx context.Context) ([]*model.Role, error)
 }
@@ -91,4 +106,8 @@ func (s *adminService) CreateRole(ctx context.Context, role *model.Role) error {
 
 func (s *adminService) ListRoles(ctx context.Context) ([]*model.Role, error) {
 	return s.userRepo.ListRoles(ctx)
+}
+
+func (s *adminService) FindUserByOAuth(ctx context.Context, provider, oauthID string) (*model.User, error) {
+	return s.userRepo.FindByOAuth(ctx, provider, oauthID)
 }

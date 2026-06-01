@@ -1,0 +1,12 @@
+baseURL = "/"
+locale = "en-us"
+title = "Enterprise Task Engine"
+theme = "hugo_book"
+
+[params]
+  # Configure Hugo Book visual layout options
+  BookTheme = "light"
+  BookToC = true
+  BookSearch = true
+  BookComments = false
+  BookFlatSection = true

@@ -1,3 +1,17 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -8,14 +22,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rmcguinness/gemini_task_engine/pkg/agents"
 	"github.com/rmcguinness/gemini_task_engine/pkg/model"
 	"github.com/rmcguinness/gemini_task_engine/pkg/persistence"
 	"github.com/rrmcguinness/modenv/pkg/modenv"
 	"gorm.io/gorm"
 )
 
-// AppConfig maps the persistence settings required for DB connection.
-type AppConfig struct {
+// BDLoaderConfig maps the persistence settings required for DB connection.
+type BDLoaderConfig struct {
 	Persistence persistence.DBConfig `toml:"persistence"`
 }
 
@@ -47,12 +62,12 @@ func main() {
 	}
 
 	log.Printf("Loading environment configurations using modenv...")
-	var cfg AppConfig
+	var cfg BDLoaderConfig
 	cloneCfg, err := modenv.Load(&cfg)
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
-	appConfig := cloneCfg.(*AppConfig)
+	appConfig := cloneCfg.(*BDLoaderConfig)
 
 	// Support DB_CONNECTION_STRING override
 	if envConn := os.Getenv("DB_CONNECTION_STRING"); envConn != "" {
@@ -129,6 +144,7 @@ func MigrateSchema(db *gorm.DB) error {
 		&model.TaskExecutionAudit{},
 		&model.TaskTrade{},
 		&model.ShiftAgentSession{},
+		&agents.AgentSessionState{},
 		&model.SOP{},
 		&model.SOPProcess{},
 		&model.SOPChunk{},

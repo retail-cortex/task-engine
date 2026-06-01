@@ -7,3 +7,7 @@ build --verbose_failures
 
 # Ensure we use platform-native toolchains
 build --incompatible_enable_cc_toolchain_resolution
+
+# Compatibility override for legacy third-party rules (like rules_hugo) returning structs
+common --incompatible_disallow_struct_provider_syntax=false
+

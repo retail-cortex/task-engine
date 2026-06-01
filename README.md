@@ -1,19 +1,19 @@
-# Intelligent Tasking Engine
+# Enterprise Task Engine
 
-An enterprise-grade, multi-regional Agentic Tasking Engine built on Go, React, and Bazel 8, powered by Google's Model Context Protocol (MCP) and Gemini AI.
+An enterprise-grade, multi-regional Task Orchestration Engine built on Go, React, and Bazel 8, powered by Google's Model Context Protocol (MCP) and Gemini AI.
 
 ---
 
 ## Project Overview
 
-The **Intelligent Tasking Engine** orchestrates operational retail and task workflows, combining static rule-based scheduling with dynamic AI agent execution.
+The **Enterprise Task Engine** orchestrates operational retail and task workflows, combining static rule-based scheduling with dynamic AI agent execution.
 
 - **Administrative MDM & Schema CRUD:** Fully managed entities including Users, Roles, Locations, Task Templates, Certifications, and SOPs.
 - **AI-Assisted Task Execution:** Real-time query resolution via vector search against localized SOP context windows (`pgvector` on AlloyDB).
 - **Human-in-the-Loop Compliance:** Explicit override mechanisms that trigger transactional audit ledgers using custom GORM Hooks.
 - **Model Context Protocol (MCP):** Fully loaded agent definitions loaded from the `/pkg/agents` module, exposed hermetically over JSON-RPC.
 
-For a deep dive into technical boundaries, database schemas, and spatial mapping domains, read the [Architectural Design Document](docs/architecture.md).
+For a deep dive into technical boundaries, database schemas, and spatial mapping domains, read the **[Architectural Design Document](docs/content/docs/architecture.md)**, **[Event-Driven Operations Specification](docs/content/docs/events.md)**, and the **[Background Job Scheduler Daemon Guide](docs/content/docs/scheduler.md)**.
 
 ---
 
@@ -23,10 +23,10 @@ The workspace follows the standard Go project layout (`/cmd`, `/internal`, `/pkg
 
 | Directory | Description |
 | :--- | :--- |
-| [`/cmd/server`](file:///Users/rmcguinness/Projects/internal/gemini_task_engine/cmd/server) | Entry point for the Gin API Server and JSON-RPC MCP listeners. |
+| [`/cmd/server.go`](file:///Users/rmcguinness/Projects/internal/gemini_task_engine/cmd/server.go) | Entry point for the Gin API Server and JSON-RPC MCP listeners. |
 | [`/pkg/persistence`](file:///Users/rmcguinness/Projects/internal/gemini_task_engine/pkg/persistence) | GORM configuration, GCS connectivity, pgvector client hooks, and transactional DB instances. |
 | [`/pkg/model`](file:///Users/rmcguinness/Projects/internal/gemini_task_engine/pkg/model) | Core domain entities and schemas mapped via GORM tags. |
-| [`/pkg/server`](file:///Users/rmcguinness/Projects/internal/gemini_task_engine/pkg/server) | Gin web router, custom JWT authentication validation middlewares, and route registration. |
+| [`/pkg/api`](file:///Users/rmcguinness/Projects/internal/gemini_task_engine/pkg/api) | Gin web router, custom JWT authentication validation middlewares, and route registration. |
 | [`/pkg/service`](file:///Users/rmcguinness/Projects/internal/gemini_task_engine/pkg/service) | Clean, isolated service layers encapsulating operational task flows and peer-to-peer handshakes. |
 | [`/pkg/agents`](file:///Users/rmcguinness/Projects/internal/gemini_task_engine/pkg/agents) | Gemini Model Context Protocol (MCP) agent tool implementations. |
 | [`/web/console`](file:///Users/rmcguinness/Projects/internal/gemini_task_engine/web/console) | React-based Admin Operations Dashboard built using pnpm, Vite, and TypeScript. |
@@ -54,12 +54,19 @@ bazel run //:dev_server
 - **Admin Console SPA:** Binds to `:5173`
 - **Render Test Workbench:** Binds to `:5174` (dynamically negotiated)
 
-### 3. Independent Component Builds & Tests
+### 3. Serving the Documentation Site
+To build and spin up the local Hugo server with live hot-reloading to browse the documentation locally under a rich visual style, run:
+```bash
+bazel run //docs:serve
+```
+- **Documentation Server:** Serves at `http://localhost:1313/`
+
+### 4. Independent Component Builds & Tests
 
 #### Build & Test the Backend Server
 ```bash
 # Build server binary
-bazel build //cmd/server
+bazel build //cmd:server
 
 # Run server tests
 bazel test //pkg/...

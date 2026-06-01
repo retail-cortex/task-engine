@@ -1,3 +1,17 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package model
 
 import (
@@ -8,13 +22,15 @@ import (
 type TaskExecution struct {
 	ID                      string     `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	TaskTemplateID          string     `gorm:"column:task_template_id;type:uuid;not null;index"`
+	Task                    Task       `gorm:"foreignKey:TaskTemplateID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	ParentExecutionID       *string    `gorm:"column:parent_execution_id;type:uuid;index;default:null"`
 	ExecutionType           string     `gorm:"type:varchar(50);not null;default:'STANDARD'"`
 	SubjectExecutionID      *string    `gorm:"column:subject_execution_id;type:uuid;index;default:null"`
 	InitiatorID             *string    `gorm:"column:initiator_id;type:uuid;index;default:null"`
 	AssigneeID              *string    `gorm:"column:assignee_id;type:uuid;index;default:null"`
 	EventInstanceID         string     `gorm:"column:event_instance_id;type:uuid;not null;index"`
-	Status                  string     `gorm:"type:varchar(50);not null;default:'PENDING'"`
+	Description             string     `gorm:"type:text;default:null"`
+	Status                  string     `gorm:"type:varchar(50);not null;default:'PENDING';index:idx_task_executions_status_locked_at,priority:1"`
 	Priority                int        `gorm:"not null;default:3"`
 	DueAt                   *time.Time `gorm:"default:null"`
 	PrerequisiteExecutionID *string    `gorm:"column:prerequisite_execution_id;type:uuid;index;default:null"`
@@ -22,6 +38,11 @@ type TaskExecution struct {
 	CompletedAt             *time.Time `gorm:"default:null"`
 	ChecklistState          JSONB      `gorm:"type:jsonb;default:'{}'"`
 	OverrideFlags           JSONB      `gorm:"type:jsonb;not null;default:'{}'"`
+	LockedAt                *time.Time `gorm:"default:null;index:idx_task_executions_status_locked_at,priority:2"`
+	LockedBy                *string    `gorm:"type:varchar(255);default:null"`
+	RetryCount              int        `gorm:"not null;default:0"`
+	MaxRetries              int        `gorm:"not null;default:3"`
+	LastError               *string    `gorm:"type:text;default:null"`
 	CreatedAt               time.Time  `gorm:"not null;default:now()"`
 	UpdatedAt               time.Time  `gorm:"not null;default:now()"`
 	Version                 int        `gorm:"not null;default:1"`

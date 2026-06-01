@@ -1,0 +1,63 @@
+name: Deploy Hugo Docs to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache Bazel
+        uses: actions/cache@v4
+        with:
+          path: ~/.bazel-cache
+          key: bazel-cache-${{ runner.os }}-${{ hashFiles('**/BUILD.bazel', '**/MODULE.bazel', '**/MODULE.bazel.lock') }}
+          restore-keys: |
+            bazel-cache-${{ runner.os }}-
+
+      - name: Build Docs Site
+        run: |
+          bazel build --disk_cache=~/.bazel-cache/disk --repository_cache=~/.bazel-cache/repo //docs:site
+
+      - name: Stage built site
+        run: |
+          mkdir -p dist
+          cp -rL bazel-bin/docs/site/* dist/
+          chmod -R +w dist
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

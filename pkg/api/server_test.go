@@ -1,3 +1,17 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package api_test
 
 import (
@@ -12,6 +26,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rmcguinness/gemini_task_engine/pkg/api"
 	"github.com/rmcguinness/gemini_task_engine/pkg/model"
+	"github.com/rmcguinness/gemini_task_engine/pkg/service"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,11 +44,19 @@ type mockAdminService struct {
 	RegisterOrganizationFunc     func(ctx context.Context, org *model.Organization) error
 	AssignUserToOrganizationFunc func(ctx context.Context, orgID, userID string) error
 	ListOrganizationsFunc        func(ctx context.Context) ([]*model.Organization, error)
+	FindUserByOAuthFunc          func(ctx context.Context, provider, oauthID string) (*model.User, error)
 }
 
 func (m *mockAdminService) ListUsers(ctx context.Context) ([]*model.User, error) {
 	if m.ListUsersFunc != nil {
 		return m.ListUsersFunc(ctx)
+	}
+	return nil, nil
+}
+
+func (m *mockAdminService) FindUserByOAuth(ctx context.Context, provider, oauthID string) (*model.User, error) {
+	if m.FindUserByOAuthFunc != nil {
+		return m.FindUserByOAuthFunc(ctx, provider, oauthID)
 	}
 	return nil, nil
 }
@@ -119,10 +142,14 @@ type mockTaskService struct {
 	GetQueueFunc                func(ctx context.Context, siteID string) ([]*model.TaskExecution, error)
 	GetOrgTasksFunc             func(ctx context.Context, orgID string) ([]*model.TaskExecution, error)
 	GetUserSiteTasksFunc        func(ctx context.Context, siteID, userID string) ([]*model.TaskExecution, error)
-	UpdateStatusFunc            func(ctx context.Context, executionID, status, userID string) error
+	UpdateStatusFunc            func(ctx context.Context, executionID, status, checklistState, userID string) error
 	OverrideAssetConstraintFunc func(ctx context.Context, executionID, assetID, justification, userID string) error
 	ProposeTradeFunc            func(ctx context.Context, executionID, proposedAssigneeID, initiatorID string) error
 	ApproveTradeFunc            func(ctx context.Context, tradeID, supervisorID string) error
+	ListPendingTradesFunc       func(ctx context.Context, userID string) ([]*model.TaskTrade, error)
+	AcceptTradeFunc            func(ctx context.Context, tradeID, targetUserID string) error
+	RejectTradeFunc            func(ctx context.Context, tradeID, targetUserID string) error
+	ListActiveSitesFunc         func(ctx context.Context) ([]*model.Site, error)
 }
 
 func (m *mockTaskService) GetQueue(ctx context.Context, siteID string) ([]*model.TaskExecution, error) {
@@ -146,9 +173,9 @@ func (m *mockTaskService) GetUserSiteTasks(ctx context.Context, siteID, userID s
 	return nil, nil
 }
 
-func (m *mockTaskService) UpdateStatus(ctx context.Context, executionID, status, userID string) error {
+func (m *mockTaskService) UpdateStatus(ctx context.Context, executionID, status, checklistState, userID string) error {
 	if m.UpdateStatusFunc != nil {
-		return m.UpdateStatusFunc(ctx, executionID, status, userID)
+		return m.UpdateStatusFunc(ctx, executionID, status, checklistState, userID)
 	}
 	return nil
 }
@@ -174,8 +201,39 @@ func (m *mockTaskService) ApproveTrade(ctx context.Context, tradeID, supervisorI
 	return nil
 }
 
+func (m *mockTaskService) ListActiveSites(ctx context.Context) ([]*model.Site, error) {
+	if m.ListActiveSitesFunc != nil {
+		return m.ListActiveSitesFunc(ctx)
+	}
+	return nil, nil
+}
+
+func (m *mockTaskService) ListPendingTrades(ctx context.Context, userID string) ([]*model.TaskTrade, error) {
+	if m.ListPendingTradesFunc != nil {
+		return m.ListPendingTradesFunc(ctx, userID)
+	}
+	return nil, nil
+}
+
+func (m *mockTaskService) AcceptTrade(ctx context.Context, tradeID, targetUserID string) error {
+	if m.AcceptTradeFunc != nil {
+		return m.AcceptTradeFunc(ctx, tradeID, targetUserID)
+	}
+	return nil
+}
+
+func (m *mockTaskService) RejectTrade(ctx context.Context, tradeID, targetUserID string) error {
+	if m.RejectTradeFunc != nil {
+		return m.RejectTradeFunc(ctx, tradeID, targetUserID)
+	}
+	return nil
+}
+
 type mockShiftService struct {
 	InitializeShiftFunc func(ctx context.Context, userID, shiftInstanceID string) (*model.ShiftAgentSession, error)
+	UpdateSessionFunc   func(ctx context.Context, session *model.ShiftAgentSession) error
+	ListActiveUsersFunc func(ctx context.Context) ([]*model.User, error)
+	GetUserProfileFunc  func(ctx context.Context, userID string) (*model.User, error)
 }
 
 func (m *mockShiftService) InitializeShift(ctx context.Context, userID, shiftInstanceID string) (*model.ShiftAgentSession, error) {
@@ -185,10 +243,33 @@ func (m *mockShiftService) InitializeShift(ctx context.Context, userID, shiftIns
 	return nil, nil
 }
 
+func (m *mockShiftService) UpdateSession(ctx context.Context, session *model.ShiftAgentSession) error {
+	if m.UpdateSessionFunc != nil {
+		return m.UpdateSessionFunc(ctx, session)
+	}
+	return nil
+}
+
+func (m *mockShiftService) ListActiveUsers(ctx context.Context) ([]*model.User, error) {
+	if m.ListActiveUsersFunc != nil {
+		return m.ListActiveUsersFunc(ctx)
+	}
+	return nil, nil
+}
+
+func (m *mockShiftService) GetUserProfile(ctx context.Context, userID string) (*model.User, error) {
+	if m.GetUserProfileFunc != nil {
+		return m.GetUserProfileFunc(ctx, userID)
+	}
+	return nil, nil
+}
+
 type mockRAGService struct {
 	RegisterSOPFunc     func(ctx context.Context, sop *model.SOP) error
 	SaveChunksFunc      func(ctx context.Context, chunks []*model.SOPChunk) error
 	QuerySimilarityFunc func(ctx context.Context, query model.Float32Vector, limit int) ([]*model.SOPChunk, error)
+	IngestSOPAsyncFunc  func(ctx context.Context, title string, canonicalURL string) (*model.SOP, *model.SOPProcess, error)
+	CheckSOPUpdatesFunc func(ctx context.Context, sopID string) (bool, error)
 }
 
 func (m *mockRAGService) RegisterSOP(ctx context.Context, sop *model.SOP) error {
@@ -212,6 +293,83 @@ func (m *mockRAGService) QuerySimilarity(ctx context.Context, query model.Float3
 	return nil, nil
 }
 
+func (m *mockRAGService) IngestSOPAsync(ctx context.Context, title string, canonicalURL string) (*model.SOP, *model.SOPProcess, error) {
+	if m.IngestSOPAsyncFunc != nil {
+		return m.IngestSOPAsyncFunc(ctx, title, canonicalURL)
+	}
+	return nil, nil, nil
+}
+
+func (m *mockRAGService) CheckSOPUpdates(ctx context.Context, sopID string) (bool, error) {
+	if m.CheckSOPUpdatesFunc != nil {
+		return m.CheckSOPUpdatesFunc(ctx, sopID)
+	}
+	return false, nil
+}
+
+type mockAutomationService struct {
+	ProcessBatchEventFunc     func(ctx context.Context, eventInstanceID string) ([]*model.TaskExecution, error)
+	TriggerStreamingEventFunc func(ctx context.Context, siteID string, organizerID string, eventType model.EventType, description string) (*model.TaskExecution, error)
+	ListTemplatesFunc         func(ctx context.Context) ([]*model.Task, error)
+}
+
+func (m *mockAutomationService) ProcessBatchEvent(ctx context.Context, eventInstanceID string) ([]*model.TaskExecution, error) {
+	if m.ProcessBatchEventFunc != nil {
+		return m.ProcessBatchEventFunc(ctx, eventInstanceID)
+	}
+	return nil, nil
+}
+
+func (m *mockAutomationService) TriggerStreamingEvent(ctx context.Context, siteID string, organizerID string, eventType model.EventType, description string) (*model.TaskExecution, error) {
+	if m.TriggerStreamingEventFunc != nil {
+		return m.TriggerStreamingEventFunc(ctx, siteID, organizerID, eventType, description)
+	}
+	return nil, nil
+}
+
+func (m *mockAutomationService) ListTemplates(ctx context.Context) ([]*model.Task, error) {
+	if m.ListTemplatesFunc != nil {
+		return m.ListTemplatesFunc(ctx)
+	}
+	return nil, nil
+}
+
+type mockSchedulerService struct {
+	service.SchedulerService
+	GetStatusFunc              func() service.SchedulerStatus
+	ForceTriggerBatchSweepFunc func(ctx context.Context) error
+}
+
+func (m *mockSchedulerService) Start(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockSchedulerService) Stop() error {
+	return nil
+}
+
+func (m *mockSchedulerService) IsLeader() bool {
+	return true
+}
+
+func (m *mockSchedulerService) NodeID() string {
+	return "mock-node-ID-777"
+}
+
+func (m *mockSchedulerService) GetStatus() service.SchedulerStatus {
+	if m.GetStatusFunc != nil {
+		return m.GetStatusFunc()
+	}
+	return service.SchedulerStatus{NodeID: "mock-node-ID-777", IsLeader: true}
+}
+
+func (m *mockSchedulerService) ForceTriggerBatchSweep(ctx context.Context) error {
+	if m.ForceTriggerBatchSweepFunc != nil {
+		return m.ForceTriggerBatchSweepFunc(ctx)
+	}
+	return nil
+}
+
 func init() {
 	gin.SetMode(gin.TestMode)
 }
@@ -221,8 +379,10 @@ func TestReadiness(t *testing.T) {
 	taskSvc := &mockTaskService{}
 	shiftSvc := &mockShiftService{}
 	ragSvc := &mockRAGService{}
+	automationSvc := &mockAutomationService{}
+	schedulerSvc := &mockSchedulerService{}
 
-	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc)
+	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc, automationSvc, schedulerSvc)
 	assert.NoError(t, err)
 
 	req := httptest.NewRequest("GET", "/health/readiness", nil)
@@ -242,8 +402,10 @@ func TestCORSHeaders(t *testing.T) {
 	taskSvc := &mockTaskService{}
 	shiftSvc := &mockShiftService{}
 	ragSvc := &mockRAGService{}
+	automationSvc := &mockAutomationService{}
+	schedulerSvc := &mockSchedulerService{}
 
-	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc)
+	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc, automationSvc, schedulerSvc)
 	assert.NoError(t, err)
 
 	req := httptest.NewRequest("OPTIONS", "/health/readiness", nil)
@@ -260,13 +422,15 @@ func TestUserContextMiddleware(t *testing.T) {
 	taskSvc := &mockTaskService{}
 	shiftSvc := &mockShiftService{}
 	ragSvc := &mockRAGService{}
+	automationSvc := &mockAutomationService{}
+	schedulerSvc := &mockSchedulerService{}
 
-	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc)
+	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc, automationSvc, schedulerSvc)
 	assert.NoError(t, err)
 
 	// Target endpoint calls task service, let's capture the user ID passed from operational.go
 	var capturedUserID string
-	taskSvc.UpdateStatusFunc = func(ctx context.Context, executionID, status, userID string) error {
+	taskSvc.UpdateStatusFunc = func(ctx context.Context, executionID, status, checklistState, userID string) error {
 		capturedUserID = userID
 		return nil
 	}
@@ -307,8 +471,10 @@ func TestAdminEndpoints(t *testing.T) {
 	taskSvc := &mockTaskService{}
 	shiftSvc := &mockShiftService{}
 	ragSvc := &mockRAGService{}
+	automationSvc := &mockAutomationService{}
+	schedulerSvc := &mockSchedulerService{}
 
-	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc)
+	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc, automationSvc, schedulerSvc)
 	assert.NoError(t, err)
 
 	t.Run("ListUsers", func(t *testing.T) {
@@ -368,6 +534,28 @@ func TestAdminEndpoints(t *testing.T) {
 		assert.Equal(t, "user-456", capturedUserID)
 		assert.Equal(t, "role-123", capturedRoleID)
 	})
+
+	t.Run("GetSchedulerStatus", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/v1/admin/scheduler/status", nil)
+		w := httptest.NewRecorder()
+		srv.Engine().ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var status service.SchedulerStatus
+		err := json.Unmarshal(w.Body.Bytes(), &status)
+		assert.NoError(t, err)
+		assert.Equal(t, "mock-node-ID-777", status.NodeID)
+		assert.True(t, status.IsLeader)
+	})
+
+	t.Run("TriggerSchedulerSweep", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/api/v1/admin/scheduler/trigger", nil)
+		w := httptest.NewRecorder()
+		srv.Engine().ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), "Scheduled batch sweeps materialized successfully")
+	})
 }
 
 func TestOperationalEndpoints(t *testing.T) {
@@ -375,8 +563,10 @@ func TestOperationalEndpoints(t *testing.T) {
 	taskSvc := &mockTaskService{}
 	shiftSvc := &mockShiftService{}
 	ragSvc := &mockRAGService{}
+	automationSvc := &mockAutomationService{}
+	schedulerSvc := &mockSchedulerService{}
 
-	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc)
+	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc, automationSvc, schedulerSvc)
 	assert.NoError(t, err)
 
 	t.Run("GetSiteTasks - Success", func(t *testing.T) {
@@ -492,12 +682,14 @@ func TestOperationalEndpointsFailure(t *testing.T) {
 	taskSvc := &mockTaskService{}
 	shiftSvc := &mockShiftService{}
 	ragSvc := &mockRAGService{}
+	automationSvc := &mockAutomationService{}
+	schedulerSvc := &mockSchedulerService{}
 
-	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc)
+	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc, automationSvc, schedulerSvc)
 	assert.NoError(t, err)
 
 	t.Run("UpdateTaskStatus - Error", func(t *testing.T) {
-		taskSvc.UpdateStatusFunc = func(ctx context.Context, executionID, status, userID string) error {
+		taskSvc.UpdateStatusFunc = func(ctx context.Context, executionID, status, checklistState, userID string) error {
 			return errors.New("database failure")
 		}
 

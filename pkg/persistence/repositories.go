@@ -1,3 +1,17 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package persistence
 
 import (
@@ -11,6 +25,7 @@ import (
 type UserRepository interface {
 	Create(ctx context.Context, u *model.User) error
 	FindByID(ctx context.Context, id string) (*model.User, error)
+	FindByOAuth(ctx context.Context, provider, oauthID string) (*model.User, error)
 	Update(ctx context.Context, u *model.User) error
 	AddRole(ctx context.Context, userID, roleID string) error
 	List(ctx context.Context) ([]*model.User, error)
@@ -30,6 +45,7 @@ type OrganizationRepository interface {
 type SiteRepository interface {
 	Create(ctx context.Context, s *model.Site) error
 	FindByID(ctx context.Context, id string) (*model.Site, error)
+	List(ctx context.Context) ([]*model.Site, error)
 	CreateLocation(ctx context.Context, l *model.Location) error
 	FindLocationByID(ctx context.Context, id string) (*model.Location, error)
 	CreateAsset(ctx context.Context, a *model.Asset) error
@@ -41,6 +57,7 @@ type SiteRepository interface {
 type TaskRepository interface {
 	Create(ctx context.Context, t *model.Task) error
 	FindByID(ctx context.Context, id string) (*model.Task, error)
+	List(ctx context.Context) ([]*model.Task, error)
 	AddApprovalRule(ctx context.Context, r *model.TaskApprovalRule) error
 }
 
@@ -55,6 +72,7 @@ type TaskExecutionRepository interface {
 	CreateTrade(ctx context.Context, t *model.TaskTrade) error
 	FindTradeByID(ctx context.Context, id string) (*model.TaskTrade, error)
 	UpdateTrade(ctx context.Context, t *model.TaskTrade) error
+	FindPendingTradesForUser(ctx context.Context, userID string) ([]*model.TaskTrade, error)
 	CreateAudit(ctx context.Context, a *model.TaskExecutionAudit) error
 }
 
@@ -69,7 +87,11 @@ type ShiftAgentSessionRepository interface {
 // SOPRepository coordinates the storage, indexing processes, and cosine distance vector searches.
 type SOPRepository interface {
 	Create(ctx context.Context, s *model.SOP) error
+	FindByID(ctx context.Context, id string) (*model.SOP, error)
+	Update(ctx context.Context, s *model.SOP) error
 	CreateProcess(ctx context.Context, p *model.SOPProcess) error
+	FindProcessByID(ctx context.Context, id string) (*model.SOPProcess, error)
+	UpdateProcess(ctx context.Context, p *model.SOPProcess) error
 	CreateChunks(ctx context.Context, chunks []*model.SOPChunk) error
 	QuerySimilarity(ctx context.Context, embedding model.Float32Vector, limit int) ([]*model.SOPChunk, error)
 }
@@ -119,6 +141,12 @@ func (r *userRepository) ListRoles(ctx context.Context) ([]*model.Role, error) {
 	return roles, err
 }
 
+func (r *userRepository) FindByOAuth(ctx context.Context, provider, oauthID string) (*model.User, error) {
+	var u model.User
+	err := r.db.WithContext(ctx).Preload("Roles").Preload("Organizations").Preload("Sites").First(&u, "o_auth_provider = ? AND o_auth_id = ?", provider, oauthID).Error
+	return &u, err
+}
+
 type organizationRepository struct {
 	db *gorm.DB
 }
@@ -164,6 +192,14 @@ func (r *siteRepository) FindByID(ctx context.Context, id string) (*model.Site, 
 	var s model.Site
 	err := r.db.WithContext(ctx).Preload("Locations").First(&s, "id = ?", id).Error
 	return &s, err
+}
+
+func (r *siteRepository) List(ctx context.Context) ([]*model.Site, error) {
+	var list []*model.Site
+	if err := r.db.WithContext(ctx).Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 func (r *siteRepository) CreateLocation(ctx context.Context, l *model.Location) error {
@@ -212,6 +248,12 @@ func (r *taskRepository) AddApprovalRule(ctx context.Context, rule *model.TaskAp
 	return r.db.WithContext(ctx).Create(rule).Error
 }
 
+func (r *taskRepository) List(ctx context.Context) ([]*model.Task, error) {
+	var tasks []*model.Task
+	err := r.db.WithContext(ctx).Preload("Assets").Preload("ApprovalRules").Preload("SOPs").Find(&tasks).Error
+	return tasks, err
+}
+
 type taskExecutionRepository struct {
 	db *gorm.DB
 }
@@ -226,7 +268,7 @@ func (r *taskExecutionRepository) Create(ctx context.Context, e *model.TaskExecu
 
 func (r *taskExecutionRepository) FindByID(ctx context.Context, id string) (*model.TaskExecution, error) {
 	var e model.TaskExecution
-	err := r.db.WithContext(ctx).First(&e, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("Task").First(&e, "id = ?", id).Error
 	return &e, err
 }
 
@@ -238,7 +280,7 @@ func (r *taskExecutionRepository) GetQueue(ctx context.Context, siteID string) (
 	var list []*model.TaskExecution
 	// Join with event instances and schedules to filter by siteID
 	err := r.db.WithContext(ctx).
-		Table("task_executions").
+		Preload("Task").
 		Joins("JOIN user_event_instances ON user_event_instances.id = task_executions.event_instance_id").
 		Joins("JOIN user_event_schedules ON user_event_schedules.id = user_event_instances.schedule_id").
 		Joins("JOIN events ON events.id = user_event_schedules.event_id").
@@ -251,7 +293,7 @@ func (r *taskExecutionRepository) GetQueue(ctx context.Context, siteID string) (
 func (r *taskExecutionRepository) GetOrgTasks(ctx context.Context, orgID string) ([]*model.TaskExecution, error) {
 	var list []*model.TaskExecution
 	err := r.db.WithContext(ctx).
-		Table("task_executions").
+		Preload("Task").
 		Joins("JOIN user_event_instances ON user_event_instances.id = task_executions.event_instance_id").
 		Joins("JOIN user_event_schedules ON user_event_schedules.id = user_event_instances.schedule_id").
 		Joins("JOIN events ON events.id = user_event_schedules.event_id").
@@ -265,7 +307,7 @@ func (r *taskExecutionRepository) GetOrgTasks(ctx context.Context, orgID string)
 func (r *taskExecutionRepository) GetUserSiteTasks(ctx context.Context, siteID, userID string) ([]*model.TaskExecution, error) {
 	var list []*model.TaskExecution
 	err := r.db.WithContext(ctx).
-		Table("task_executions").
+		Preload("Task").
 		Joins("JOIN user_event_instances ON user_event_instances.id = task_executions.event_instance_id").
 		Joins("JOIN user_event_schedules ON user_event_schedules.id = user_event_instances.schedule_id").
 		Joins("JOIN events ON events.id = user_event_schedules.event_id").
@@ -287,6 +329,12 @@ func (r *taskExecutionRepository) FindTradeByID(ctx context.Context, id string) 
 
 func (r *taskExecutionRepository) UpdateTrade(ctx context.Context, t *model.TaskTrade) error {
 	return r.db.WithContext(ctx).Save(t).Error
+}
+
+func (r *taskExecutionRepository) FindPendingTradesForUser(ctx context.Context, userID string) ([]*model.TaskTrade, error) {
+	var trades []*model.TaskTrade
+	err := r.db.WithContext(ctx).Where("proposed_assignee_id = ? AND status = 'PENDING'", userID).Find(&trades).Error
+	return trades, err
 }
 
 func (r *taskExecutionRepository) CreateAudit(ctx context.Context, a *model.TaskExecutionAudit) error {
@@ -333,8 +381,28 @@ func (r *sopRepository) Create(ctx context.Context, s *model.SOP) error {
 	return r.db.WithContext(ctx).Create(s).Error
 }
 
+func (r *sopRepository) FindByID(ctx context.Context, id string) (*model.SOP, error) {
+	var s model.SOP
+	err := r.db.WithContext(ctx).First(&s, "id = ?", id).Error
+	return &s, err
+}
+
+func (r *sopRepository) Update(ctx context.Context, s *model.SOP) error {
+	return r.db.WithContext(ctx).Save(s).Error
+}
+
 func (r *sopRepository) CreateProcess(ctx context.Context, p *model.SOPProcess) error {
 	return r.db.WithContext(ctx).Create(p).Error
+}
+
+func (r *sopRepository) FindProcessByID(ctx context.Context, id string) (*model.SOPProcess, error) {
+	var p model.SOPProcess
+	err := r.db.WithContext(ctx).First(&p, "id = ?", id).Error
+	return &p, err
+}
+
+func (r *sopRepository) UpdateProcess(ctx context.Context, p *model.SOPProcess) error {
+	return r.db.WithContext(ctx).Save(p).Error
 }
 
 func (r *sopRepository) CreateChunks(ctx context.Context, chunks []*model.SOPChunk) error {

@@ -1,3 +1,17 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package service
 
 import (
@@ -16,10 +30,14 @@ type TaskService interface {
 	GetQueue(ctx context.Context, siteID string) ([]*model.TaskExecution, error)
 	GetOrgTasks(ctx context.Context, orgID string) ([]*model.TaskExecution, error)
 	GetUserSiteTasks(ctx context.Context, siteID, userID string) ([]*model.TaskExecution, error)
-	UpdateStatus(ctx context.Context, executionID, status, userID string) error
+	UpdateStatus(ctx context.Context, executionID, status, checklistState, userID string) error
 	OverrideAssetConstraint(ctx context.Context, executionID, assetID, justification, userID string) error
 	ProposeTrade(ctx context.Context, executionID, proposedAssigneeID, initiatorID string) error
 	ApproveTrade(ctx context.Context, tradeID, supervisorID string) error
+	ListPendingTrades(ctx context.Context, userID string) ([]*model.TaskTrade, error)
+	AcceptTrade(ctx context.Context, tradeID, targetUserID string) error
+	RejectTrade(ctx context.Context, tradeID, targetUserID string) error
+	ListActiveSites(ctx context.Context) ([]*model.Site, error)
 }
 
 type taskService struct {
@@ -39,6 +57,10 @@ func (s *taskService) GetQueue(ctx context.Context, siteID string) ([]*model.Tas
 	return s.execRepo.GetQueue(ctx, siteID)
 }
 
+func (s *taskService) ListActiveSites(ctx context.Context) ([]*model.Site, error) {
+	return s.siteRepo.List(ctx)
+}
+
 func (s *taskService) GetOrgTasks(ctx context.Context, orgID string) ([]*model.TaskExecution, error) {
 	return s.execRepo.GetOrgTasks(ctx, orgID)
 }
@@ -47,7 +69,7 @@ func (s *taskService) GetUserSiteTasks(ctx context.Context, siteID, userID strin
 	return s.execRepo.GetUserSiteTasks(ctx, siteID, userID)
 }
 
-func (s *taskService) UpdateStatus(ctx context.Context, executionID, status, userID string) error {
+func (s *taskService) UpdateStatus(ctx context.Context, executionID, status, checklistState, userID string) error {
 	// Bind the user to context so GORM hooks can retrieve it for audit trails
 	ctxWithUser := context.WithValue(ctx, "userID", userID)
 
@@ -60,6 +82,9 @@ func (s *taskService) UpdateStatus(ctx context.Context, executionID, status, use
 	if status == "COMPLETED" {
 		now := time.Now()
 		exec.CompletedAt = &now
+	}
+	if checklistState != "" {
+		exec.ChecklistState = model.JSONB([]byte(checklistState))
 	}
 
 	return s.execRepo.Update(ctxWithUser, exec)
@@ -107,13 +132,37 @@ func (s *taskService) OverrideAssetConstraint(ctx context.Context, executionID, 
 }
 
 func (s *taskService) ProposeTrade(ctx context.Context, executionID, proposedAssigneeID, initiatorID string) error {
+	ctxWithUser := context.WithValue(ctx, "userID", initiatorID)
+
+	exec, err := s.execRepo.FindByID(ctxWithUser, executionID)
+	if err != nil {
+		return fmt.Errorf("failed to find task execution for trade: %w", err)
+	}
+
+	if exec.Status == "COMPLETED" {
+		return errors.New("cannot trade completed tasks")
+	}
+	if exec.Status == "TRADE_PENDING" {
+		return errors.New("task is already pending a trade proposal")
+	}
+
 	trade := &model.TaskTrade{
 		TaskExecutionID:    executionID,
 		InitiatorID:        initiatorID,
 		ProposedAssigneeID: proposedAssigneeID,
 		Status:             "PENDING",
 	}
-	return s.execRepo.CreateTrade(ctx, trade)
+
+	if err := s.execRepo.CreateTrade(ctxWithUser, trade); err != nil {
+		return fmt.Errorf("failed to create trade record: %w", err)
+	}
+
+	exec.Status = "TRADE_PENDING"
+	if err := s.execRepo.Update(ctxWithUser, exec); err != nil {
+		return fmt.Errorf("failed to update task execution status to TRADE_PENDING: %w", err)
+	}
+
+	return nil
 }
 
 func (s *taskService) ApproveTrade(ctx context.Context, tradeID, supervisorID string) error {
@@ -135,11 +184,115 @@ func (s *taskService) ApproveTrade(ctx context.Context, tradeID, supervisorID st
 
 	// Performs physical handover
 	exec.AssigneeID = &trade.ProposedAssigneeID
+	exec.Status = "PENDING"
 
 	if err := s.execRepo.Update(ctxWithUser, exec); err != nil {
 		return fmt.Errorf("failed to reassign task during trade approval: %w", err)
 	}
 
 	trade.Status = "APPROVED"
+	return s.execRepo.UpdateTrade(ctxWithUser, trade)
+}
+
+func (s *taskService) ListPendingTrades(ctx context.Context, userID string) ([]*model.TaskTrade, error) {
+	return s.execRepo.FindPendingTradesForUser(ctx, userID)
+}
+
+func (s *taskService) AcceptTrade(ctx context.Context, tradeID, targetUserID string) error {
+	ctxWithUser := context.WithValue(ctx, "userID", targetUserID)
+
+	trade, err := s.execRepo.FindTradeByID(ctxWithUser, tradeID)
+	if err != nil {
+		return fmt.Errorf("failed to find trade: %w", err)
+	}
+
+	if trade.Status != "PENDING" {
+		return errors.New("trade request is not pending")
+	}
+
+	if trade.ProposedAssigneeID != targetUserID {
+		return errors.New("only the proposed colleague can accept this task trade")
+	}
+
+	exec, err := s.execRepo.FindByID(ctxWithUser, trade.TaskExecutionID)
+	if err != nil {
+		return fmt.Errorf("failed to find execution for trade: %w", err)
+	}
+
+	// Performs physical handover
+	exec.AssigneeID = &trade.ProposedAssigneeID
+
+	// Reset status back to PENDING (or IN_PROGRESS if steps were completed)
+	hasCompletedSteps := false
+	if len(exec.ChecklistState) > 0 {
+		var checklist []map[string]interface{}
+		if err := json.Unmarshal(exec.ChecklistState, &checklist); err == nil {
+			for _, step := range checklist {
+				if comp, ok := step["completed"].(bool); ok && comp {
+					hasCompletedSteps = true
+					break
+				}
+			}
+		}
+	}
+	if hasCompletedSteps {
+		exec.Status = "IN_PROGRESS"
+	} else {
+		exec.Status = "PENDING"
+	}
+
+	if err := s.execRepo.Update(ctxWithUser, exec); err != nil {
+		return fmt.Errorf("failed to reassign task during trade acceptance: %w", err)
+	}
+
+	trade.Status = "APPROVED"
+	return s.execRepo.UpdateTrade(ctxWithUser, trade)
+}
+
+func (s *taskService) RejectTrade(ctx context.Context, tradeID, targetUserID string) error {
+	ctxWithUser := context.WithValue(ctx, "userID", targetUserID)
+
+	trade, err := s.execRepo.FindTradeByID(ctxWithUser, tradeID)
+	if err != nil {
+		return fmt.Errorf("failed to find trade: %w", err)
+	}
+
+	if trade.Status != "PENDING" {
+		return errors.New("trade request is not pending")
+	}
+
+	if trade.ProposedAssigneeID != targetUserID {
+		return errors.New("only the proposed colleague can reject this task trade")
+	}
+
+	exec, err := s.execRepo.FindByID(ctxWithUser, trade.TaskExecutionID)
+	if err != nil {
+		return fmt.Errorf("failed to find execution for trade: %w", err)
+	}
+
+	// Reset status back to PENDING (or IN_PROGRESS if steps were completed)
+	hasCompletedSteps := false
+	if len(exec.ChecklistState) > 0 {
+		var checklist []map[string]interface{}
+		if err := json.Unmarshal(exec.ChecklistState, &checklist); err == nil {
+			for _, step := range checklist {
+				if comp, ok := step["completed"].(bool); ok && comp {
+					hasCompletedSteps = true
+					break
+				}
+			}
+		}
+	}
+	if hasCompletedSteps {
+		exec.Status = "IN_PROGRESS"
+	} else {
+		exec.Status = "PENDING"
+	}
+
+	if err := s.execRepo.Update(ctxWithUser, exec); err != nil {
+		return fmt.Errorf("failed to restore task status during trade rejection: %w", err)
+	}
+
+	trade.Status = "REJECTED"
 	return s.execRepo.UpdateTrade(ctxWithUser, trade)
 }
