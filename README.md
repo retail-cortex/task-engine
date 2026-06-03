@@ -54,6 +54,21 @@ bazel run //:dev_server
 - **Admin Console SPA:** Binds to `:5173`
 - **Render Test Workbench:** Binds to `:5174` (dynamically negotiated)
 
+#### Live Hot-Swapping with `ibazel`
+To enable dynamic in-browser Hot Module Replacement (HMR) on local file edits without manually restarting targets, run the dev cluster using `ibazel` (the interactive Bazel watcher):
+
+* **Option A (Zero-Install via npx):**
+  ```bash
+  npx @bazel/ibazel run //:dev_server
+  ```
+* **Option B (Global CLI installation):**
+  ```bash
+  npm install -g @bazel/ibazel
+  ibazel run //:dev_server
+  ```
+
+The console frontend target has been pre-configured with `tags = ["ibazel_notify_changes"]` to permit direct sandbox notification and instant Vite HMR sweeps.
+
 ### 3. Serving the Documentation Site
 To build and spin up the local Hugo server with live hot-reloading to browse the documentation locally under a rich visual style, run:
 ```bash
@@ -88,3 +103,21 @@ bazel build //web/render-test:build
 - **Go Development:** Private business logic is strictly kept under `/internal` or private submodules. Multi-stage containerization packages Go binaries inside secure distroless containers.
 - **TypeScript/React Styling:** Functional arrow syntax components wrap Material 3 `ThemeProvider` definitions. Tailwind CSS is reserved for localized layouts.
 - **Python Tooling:** Any external automation or helper scripts must be executed exclusively via `uv` under the designated python environment.
+
+---
+
+## Google Workspace Directory OU Structure & Test Identity Matrix
+
+To test enterprise RBAC, multi-store manager overlaps, and regional grounding workflows, the local sandbox environment features a fully provisioned Google Workspace directory mapping 553 user accounts across 109 physical locations.
+
+For the full reference documentation detailing:
+* **Organizational Unit (OU) Hierarchy topologies**
+* **Test Personnel account naming conventions**
+* **Active Regional Managers & Geofootprints matrix**
+* **Complete 109 Storefront Location Lookup table**
+* **Standard Role Access profiles and Database Role ID assignments**
+
+Read the **[Workspace Directory & Store Mapping Specifications](docs/content/docs/store_information.md)** in the internal specifications portal.
+
+
+

@@ -28,10 +28,6 @@ terraform {
       source  = "hashicorp/google"
       version = "~> 5.0"
     }
-    googleworkspace = {
-      source  = "hashicorp/googleworkspace"
-      version = "~> 0.7"
-    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.5"
@@ -39,17 +35,16 @@ terraform {
   }
 }
 
-# Principal provider configurations
+# Dynamic credentials integration via active gcloud first-party session
+data "external" "gcloud_token" {
+  program = ["sh", "-c", "echo \"{\\\"token\\\": \\\"$(gcloud auth application-default print-access-token)\\\"}\""]
+}
 
 provider "google" {
   project               = var.project_id
   region                = var.region
   user_project_override = true
   billing_project       = var.project_id
+  access_token          = data.external.gcloud_token.result.token
 }
 
-# The googleworkspace provider leverages credential parameters loaded dynamically
-# from standard Admin Directory API access environment variables or service accounts.
-provider "googleworkspace" {
-  customer_id = var.customer_id
-}

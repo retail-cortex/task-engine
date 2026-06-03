@@ -46,6 +46,11 @@ func main() {
 		appConfig.Persistence.ConnectionString = envConn
 	}
 
+	// Support PORT environment variable override for Cloud Run deployments
+	if envPort := os.Getenv("PORT"); envPort != "" {
+		appConfig.Server.Port = envPort
+	}
+
 	log.Printf("Initializing AlloyDB/PostgreSQL connection...")
 	db, err := persistence.InitDB(appConfig.Persistence)
 	if err != nil {

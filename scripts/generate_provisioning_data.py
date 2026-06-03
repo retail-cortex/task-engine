@@ -40,9 +40,24 @@ ROLE_SITE_MANAGER: str = "77777777-7777-7777-7777-777777770003"
 ROLE_SITE_ASSOCIATE: str = "77777777-7777-7777-7777-777777770004"
 ROLE_SITE_3P: str = "77777777-7777-7777-7777-777777770005"
 
-REGIONS: List[str] = ["west", "northeast", "southeast", "midwest"]
+# Divided footprint into 6 parts
+REGIONS: List[str] = [
+    "northeast",
+    "northwest",
+    "southeast",
+    "southwest",
+    "northcentral",
+    "southcentral"
+]
 
 USER_PROFILES: List[Dict[str, str]] = [
+    {
+        "role_slug": "admin",
+        "given_name": "Admin",
+        "org_path": "Admins",
+        "role_id": ROLE_SITE_MANAGER,
+        "title": "Store Systems Administrator",
+    },
     {
         "role_slug": "manager",
         "given_name": "Manager",
@@ -51,32 +66,25 @@ USER_PROFILES: List[Dict[str, str]] = [
         "title": "Store Operations Manager",
     },
     {
-        "role_slug": "lead",
-        "given_name": "Lead",
-        "org_path": "Leads",
+        "role_slug": "cashier",
+        "given_name": "Cashier",
+        "org_path": "Cashiers",
         "role_id": ROLE_SITE_ASSOCIATE,
-        "title": "Senior Operations Lead",
+        "title": "Store Cashier",
     },
     {
-        "role_slug": "associate1",
-        "given_name": "Associate One",
+        "role_slug": "associate",
+        "given_name": "Associate",
         "org_path": "Associates",
         "role_id": ROLE_SITE_ASSOCIATE,
         "title": "Customer Support Associate",
     },
     {
-        "role_slug": "associate2",
-        "given_name": "Associate Two",
-        "org_path": "Associates",
+        "role_slug": "vault",
+        "given_name": "Vault",
+        "org_path": "Vault",
         "role_id": ROLE_SITE_ASSOCIATE,
-        "title": "Inventory Replenishment Associate",
-    },
-    {
-        "role_slug": "vendor",
-        "given_name": "Vendor Checker",
-        "org_path": "Vendors",
-        "role_id": ROLE_SITE_3P,
-        "title": "Logistics Vendor Inspector",
+        "title": "Vault Cash Custodian",
     },
 ]
 
@@ -104,38 +112,55 @@ def get_store_region(name: str) -> str:
         name: Raw display name of the storefront location.
 
     Returns:
-        Geographical region identifier (west, northeast, southeast, or midwest).
+        Geographical region identifier (northeast, northwest, southeast, southwest, northcentral, or southcentral).
     """
     name_lower: str = name.lower()
 
-    west_cities: List[str] = [
-        "seattle", "san francisco", "los angeles", "denver", "phoenix",
-        "san diego", "san jose", "portland", "las vegas", "albuquerque",
-        "tucson", "fresno", "sacramento", "mesa", "colorado springs",
-        "long beach", "oakland", "bakersfield"
-    ]
     northeast_cities: List[str] = [
-        "new york", "boston", "philadelphia", "washington", "baltimore"
+        "new york", "boston", "philadelphia", "washington", "baltimore", "newark", "jersey city", "buffalo"
+    ]
+    northwest_cities: List[str] = [
+        "seattle", "portland", "boise", "spokane", "tacoma", "anchorage"
     ]
     southeast_cities: List[str] = [
-        "atlanta", "miami", "jacksonville", "charlotte", "nashville",
-        "memphis", "tampa", "arlington", "new plains", "new orleans",
-        "virginia beach", "raleigh"
+        "atlanta", "miami", "jacksonville", "charlotte", "nashville", "memphis", "tampa", 
+        "arlington", "new plains", "new orleans", "virginia beach", "raleigh", "greensboro",
+        "orlando", "st. petersburg", "chesapeake", "norfolk", "durham", "hialeah", "richmond"
     ]
-
-    for city in west_cities:
-        if city in name_lower:
-            return "west"
+    southwest_cities: List[str] = [
+        "phoenix", "las vegas", "albuquerque", "tucson", "mesa", "chandler", "scottsdale",
+        "reno", "gilbert", "glendale", "north las vegas", "henderson",
+        "los angeles", "san francisco", "san diego", "san jose", "fresno", "sacramento",
+        "long beach", "oakland", "bakersfield", "anaheim", "santa ana", "riverside",
+        "chula vista", "irvine", "fremont", "modesto"
+    ]
+    northcentral_cities: List[str] = [
+        "chicago", "columbus", "indianapolis", "detroit", "milwaukee", "minneapolis",
+        "cleveland", "aurora", "stockton", "saint paul", "cincinnati", "lincoln",
+        "des moines", "fort wayne", "madison", "toledo"
+    ]
 
     for city in northeast_cities:
         if city in name_lower:
             return "northeast"
 
+    for city in northwest_cities:
+        if city in name_lower:
+            return "northwest"
+
     for city in southeast_cities:
         if city in name_lower:
             return "southeast"
 
-    return "midwest"
+    for city in southwest_cities:
+        if city in name_lower:
+            return "southwest"
+
+    for city in northcentral_cities:
+        if city in name_lower:
+            return "northcentral"
+
+    return "southcentral"
 
 
 def parse_stores_from_sql(sql_file_path: str) -> List[Tuple[str, str]]:
@@ -234,10 +259,8 @@ def load_existing_passwords(tfstate_path: str) -> Dict[str, str]:
                     result = inst.get("attributes", {}).get("result")
                     if index_key and result:
                         if name == "user_passwords":
-                            # E.g. "44444444-4444-4444-4444-444444440000-associate1"
                             passwords[index_key] = result
                         elif name == "regional_passwords":
-                            # E.g. index_key "west" -> maps to key "regional-manager-west"
                             passwords[f"regional-manager-{index_key}"] = result
         if passwords:
             print(f"Synchronized {len(passwords)} passwords context from existing: {tfstate_path}")
@@ -261,10 +284,8 @@ def generate_passwords(user_keys: List[str], existing_passwords: Dict[str, str])
     passwords: Dict[str, str] = {}
     for key in user_keys:
         if key in existing_passwords:
-            # Synchronize with active state record to preserve identity mappings!
             passwords[key] = existing_passwords[key]
         else:
-            # Generate new 16-character secure, random password
             password: str = "".join(secrets.choice(alphabet) for _ in range(16))
             passwords[key] = password
     return passwords
@@ -272,7 +293,6 @@ def generate_passwords(user_keys: List[str], existing_passwords: Dict[str, str])
 
 def main() -> None:
     """Orchestrates dynamic data extraction and generates mapping output targets."""
-    # Define paths relative to this script location
     base_dir: str = os.path.dirname(os.path.abspath(__file__))
     sql_file_path: str = os.path.join(base_dir, "dev_env.sql")
     tf_dir: str = os.path.join(base_dir, "terraform")
@@ -288,11 +308,10 @@ def main() -> None:
     stores: List[Tuple[str, str]] = parse_stores_from_sql(sql_file_path)
     print(f"Located {len(stores)} active teststores.")
 
-    # Group stores by region to map regional managers correctly
+    # Group stores by region
     stores_by_region: Dict[str, List[str]] = {r: [] for r in REGIONS}
-
-    # 1. Generate terraform.tfvars.json map targets
     tf_stores: Dict[str, Dict[str, str]] = {}
+    
     for store_id, store_name in stores:
         region: str = get_store_region(store_name)
         stores_by_region[region].append(store_id)
@@ -303,37 +322,101 @@ def main() -> None:
             "region": region,
         }
     
-    # Generate dynamic regional managers configurations map
+    # Define 4 active regional managers
+    ACTIVE_MANAGERS: List[str] = ["west", "northeast", "southeast", "midwest"]
     tf_regional_managers: Dict[str, Dict[str, str]] = {}
-    for reg in REGIONS:
+    for reg in ACTIVE_MANAGERS:
         tf_regional_managers[reg] = {
             "email": f"regional-manager-{reg}@{DOMAIN}",
             "name": f"{reg.capitalize()} Regional Manager",
             "slug": reg,
         }
+
+    # Define exact Group-Membership mappings in terraform tfvars
+    # Standard store role groups memberships
+    tf_memberships: Dict[str, Dict[str, str]] = {}
     
+    # Define User accounts database mapping tracking (avoiding duplicates)
+    user_seed_mappings: Dict[str, Dict] = {}
+    
+    # Keep track of primary and secondary store mappings
+    # We will dynamically define overlapping stores for managers/admins
+    # Rule: For every 5 stores in a region, the manager and admin of the 1st store
+    # also supports the 2nd store as a secondary site assignment!
+    overlap_relations: Dict[str, str] = {} # primary_store_id -> secondary_store_id
+    for reg in REGIONS:
+        reg_sites = stores_by_region[reg]
+        for idx in range(0, len(reg_sites), 5):
+            if idx + 1 < len(reg_sites):
+                primary_id = reg_sites[idx]
+                secondary_id = reg_sites[idx + 1]
+                overlap_relations[primary_id] = secondary_id
+
+    # Build the exact memberships for Cloud Identity
+    for store_id, store in tf_stores.items():
+        for profile in USER_PROFILES:
+            role_slug = profile["role_slug"]
+            user_email = f"{role_slug}-{store['slug']}@{DOMAIN}"
+            primary_group_slug = f"{store['slug']}-{role_slug}"
+            
+            # Primary membership
+            primary_mem_key = f"{primary_group_slug}_{user_email}"
+            tf_memberships[primary_mem_key] = {
+                "user_email": user_email,
+                "group_slug": primary_group_slug
+            }
+            
+            # Register the user's master record
+            user_key = f"{store_id}-{role_slug}"
+            user_seed_mappings[user_key] = {
+                "user_uuid": str(uuid.uuid4()),
+                "username": f"{role_slug}-{store['slug']}",
+                "email": user_email,
+                "name": f"{profile['given_name']} {store['name']}",
+                "title": f"{profile['title']} - {store['name']}",
+                "role_id": profile["role_id"],
+                "sites": [(store_id, True)] # List of (store_id, is_primary)
+            }
+
+    # Apply overlap memberships
+    for primary_id, secondary_id in overlap_relations.items():
+        primary_store = tf_stores[primary_id]
+        secondary_store = tf_stores[secondary_id]
+        
+        # Apply to 'manager' and 'admin' profiles
+        for role_slug in ["manager", "admin"]:
+            # The user is the primary user from the primary store
+            user_email = f"{role_slug}-{primary_store['slug']}@{DOMAIN}"
+            secondary_group_slug = f"{secondary_store['slug']}-{role_slug}"
+            
+            # Add secondary membership in Cloud Identity!
+            overlap_mem_key = f"{secondary_group_slug}_{user_email}"
+            tf_memberships[overlap_mem_key] = {
+                "user_email": user_email,
+                "group_slug": secondary_group_slug
+            }
+            
+            # Update the seed record to include the secondary site mapping
+            primary_user_key = f"{primary_id}-{role_slug}"
+            if primary_user_key in user_seed_mappings:
+                user_seed_mappings[primary_user_key]["sites"].append((secondary_id, False))
+
     tfvars_data = {
         "test_stores": tf_stores,
-        "regional_managers": tf_regional_managers
+        "regional_managers": tf_regional_managers,
+        "store_memberships": tf_memberships
     }
 
     with open(tfvars_path, "w", encoding="utf-8") as f:
         json.dump(tfvars_data, f, indent=2)
-    print(f"Successfully generated Terraform parameters: {tfvars_path}")
+    print(f"Successfully generated Terraform parameters with {len(tf_memberships)} memberships: {tfvars_path}")
 
-    # 2. Extract state-locked passwords to prevent database mapping drift
+    # Get state-locked passwords context
     existing_passwords: Dict[str, str] = load_existing_passwords(tfstate_path)
 
-    # 3. Generate passwords targets for both store users and regional managers
-    user_keys: List[str] = []
-    
-    # Store personnel keys
-    for store_id, store in tf_stores.items():
-        for profile in USER_PROFILES:
-            user_keys.append(f"{store_id}-{profile['role_slug']}")
-            
-    # Regional manager keys
-    for reg in REGIONS:
+    # Generate passwords for all unique users
+    user_keys: List[str] = list(user_seed_mappings.keys())
+    for reg in ACTIVE_MANAGERS:
         user_keys.append(f"regional-manager-{reg}")
 
     passwords_map: Dict[str, str] = generate_passwords(user_keys, existing_passwords)
@@ -342,8 +425,8 @@ def main() -> None:
         writer = csv.writer(f)
         writer.writerow(["target_id", "target_name", "category", "email", "temporary_password"])
         
-        # Write regional manager records first
-        for reg in REGIONS:
+        # Write regional managers first
+        for reg in ACTIVE_MANAGERS:
             key: str = f"regional-manager-{reg}"
             email: str = f"regional-manager-{reg}@{DOMAIN}"
             writer.writerow([
@@ -354,36 +437,42 @@ def main() -> None:
                 passwords_map[key]
             ])
             
-        # Write individual storefront personnel records
-        for store_id, store in tf_stores.items():
-            for profile in USER_PROFILES:
-                key: str = f"{store_id}-{profile['role_slug']}"
-                email: str = f"{profile['role_slug']}-{store['slug']}@{DOMAIN}"
-                writer.writerow([
-                    store_id,
-                    store["name"],
-                    f"store_{profile['role_slug']}",
-                    email,
-                    passwords_map[key]
-                ])
+        # Write store associates
+        for key, user_rec in user_seed_mappings.items():
+            store_id = user_rec["sites"][0][0]
+            store_name = tf_stores[store_id]["name"]
+            writer.writerow([
+                store_id,
+                store_name,
+                f"store_{key.split('-')[-1]}",
+                user_rec["email"],
+                passwords_map[key]
+            ])
     print(f"Successfully compiled secure passwords registry (git-ignored): {passwords_path}")
 
-    # 4. Compile database migration application user seed queries
+    # Compile GTE database seeding script
     print("Generating GTE database matching user registration SQL script...")
     sql_lines: List[str] = [
         "-- GTE Application Seeding Script for Provisioned Cloud Identity Users",
         "-- Automatically maps Google Workspace profiles natively under internal tables",
-        "\\connect gte_dev_db;",
         "BEGIN;",
         ""
     ]
 
-    # A. SEED REGIONAL MANAGER PROFILES MATRIX FIRST
+    # Helper mapping function
+    def get_manager_slug_for_region(region: str) -> str:
+        if region in ["northwest", "southwest"]:
+            return "west"
+        if region in ["northcentral", "southcentral"]:
+            return "midwest"
+        return region
+
+    # Seed Regional Managers
     sql_lines.append("-- ==============================================================================")
     sql_lines.append("-- SEEDING REGIONAL MANAGER PROFILES MATRIX")
     sql_lines.append("-- ==============================================================================")
     
-    for reg in REGIONS:
+    for reg in ACTIVE_MANAGERS:
         manager_uuid: str = str(uuid.uuid4())
         username: str = f"regional-manager-{reg}"
         email: str = f"{username}@{DOMAIN}"
@@ -392,82 +481,71 @@ def main() -> None:
         meta_escaped: str = meta_json.replace("'", "''")
 
         sql_lines.append(f"-- REGIONAL MANAGER: {reg.upper()}")
-        
-        # A.1. Insert GORM User record
         sql_lines.append(
             f"INSERT INTO users (id, o_auth_provider, o_auth_id, email, name, metadata, created_at, updated_at, version) VALUES "
             f"('{manager_uuid}', 'google', 'user-oauth-id-{username}', '{email}', '{reg.capitalize()} Regional Manager', '{meta_escaped}', NOW(), NOW(), 1) "
             f"ON CONFLICT (o_auth_provider, o_auth_id) DO UPDATE SET email = EXCLUDED.email, name = EXCLUDED.name, metadata = EXCLUDED.metadata, updated_at = NOW();"
         )
-
-        # A.2. Insert GORM User Role mapping (REGION_MANAGER)
         sql_lines.append(
             f"INSERT INTO user_roles (user_id, role_id) VALUES "
             f"('{manager_uuid}', '{ROLE_REGION_MANAGER}') "
             f"ON CONFLICT DO NOTHING;"
         )
-
-        # A.3. Insert GORM User Site mappings for ALL sites under this manager's region!
-        # The first mapped store becomes is_primary=TRUE, others FALSE.
-        reg_sites: List[str] = stores_by_region[reg]
+        
+        # Find all stores belonging to this manager's responsibility
+        reg_sites: List[str] = []
+        for store_id, store in tf_stores.items():
+            if get_manager_slug_for_region(store["region"]) == reg:
+                reg_sites.append(store_id)
+                
         for idx, store_id in enumerate(reg_sites):
             user_site_uuid: str = str(uuid.uuid4())
-            is_primary: str = "TRUE" if idx == 0 else "FALSE"
+            is_primary = "TRUE" if idx == 0 else "FALSE"
             sql_lines.append(
                 f"INSERT INTO user_sites (id, user_id, site_id, is_primary, metadata, created_at) VALUES "
                 f"('{user_site_uuid}', '{manager_uuid}', '{store_id}', {is_primary}, '{{}}', NOW()) "
                 f"ON CONFLICT DO NOTHING;"
             )
-        sql_lines.append("")  # Spacing between regional managers
+        sql_lines.append("")
 
-    # B. SEED INDIVIDUAL STORE PERSONNEL MATRIX SECOND
+    # Seed Storefront Associates with Multi-Store assignments
     sql_lines.append("-- ==============================================================================")
     sql_lines.append("-- SEEDING STOREFRONT ASSOCIATE IDENTITY MATRICES")
     sql_lines.append("-- ==============================================================================")
     
-    for store_id, store in tf_stores.items():
-        sql_lines.append(f"-- TARGET SITE: {store['name']} (Region: {store['region'].upper()})")
+    for key, user_rec in user_seed_mappings.items():
+        meta_json: str = json.dumps({"title": user_rec["title"]})
+        meta_escaped: str = meta_json.replace("'", "''")
         
-        for profile in USER_PROFILES:
-            user_uuid: str = str(uuid.uuid4())
+        sql_lines.append(f"-- USER: {user_rec['email']}")
+        sql_lines.append(
+            f"INSERT INTO users (id, o_auth_provider, o_auth_id, email, name, metadata, created_at, updated_at, version) VALUES "
+            f"('{user_rec['user_uuid']}', 'google', 'user-oauth-id-{user_rec['username']}', '{user_rec['email']}', '{user_rec['name']}', '{meta_escaped}', NOW(), NOW(), 1) "
+            f"ON CONFLICT (o_auth_provider, o_auth_id) DO UPDATE SET email = EXCLUDED.email, name = EXCLUDED.name, metadata = EXCLUDED.metadata, updated_at = NOW();"
+        )
+        sql_lines.append(
+            f"INSERT INTO user_roles (user_id, role_id) VALUES "
+            f"('{user_rec['user_uuid']}', '{user_rec['role_id']}') "
+            f"ON CONFLICT DO NOTHING;"
+        )
+        
+        # Insert one or more sites depending on overlaps
+        for store_id, is_primary in user_rec["sites"]:
             user_site_uuid: str = str(uuid.uuid4())
-            username: str = f"{profile['role_slug']}-{store['slug']}"
-            email: str = f"{username}@{DOMAIN}"
-            title: str = f"{profile['title']} - {store['name']}"
-            meta_json: str = json.dumps({"title": title})
-            meta_escaped: str = meta_json.replace("'", "''")
-            
-            # B.1. Insert GORM User record
-            sql_lines.append(
-                f"INSERT INTO users (id, o_auth_provider, o_auth_id, email, name, metadata, created_at, updated_at, version) VALUES "
-                f"('{user_uuid}', 'google', 'user-oauth-id-{username}', '{email}', '{profile['given_name']}', '{meta_escaped}', NOW(), NOW(), 1) "
-                f"ON CONFLICT (o_auth_provider, o_auth_id) DO UPDATE SET email = EXCLUDED.email, name = EXCLUDED.name, metadata = EXCLUDED.metadata, updated_at = NOW();"
-            )
-
-            # B.2. Insert GORM User Role mapping
-            sql_lines.append(
-                f"INSERT INTO user_roles (user_id, role_id) VALUES "
-                f"('{user_uuid}', '{profile['role_id']}') "
-                f"ON CONFLICT DO NOTHING;"
-            )
-
-            # B.3. Insert GORM User Site primary mapping
+            primary_sql: str = "TRUE" if is_primary else "FALSE"
             sql_lines.append(
                 f"INSERT INTO user_sites (id, user_id, site_id, is_primary, metadata, created_at) VALUES "
-                f"('{user_site_uuid}', '{user_uuid}', '{store_id}', TRUE, '{{}}', NOW()) "
+                f"('{user_site_uuid}', '{user_rec['user_uuid']}', '{store_id}', {primary_sql}, '{{}}', NOW()) "
                 f"ON CONFLICT DO NOTHING;"
             )
-            
-        sql_lines.append("")  # Spacing line between stores
+        sql_lines.append("")
 
     sql_lines.append("COMMIT;")
     
     with open(sql_seed_path, "w", encoding="utf-8") as f:
         f.write("\n".join(sql_lines))
     print(f"Successfully generated database seeding queries: {sql_seed_path}")
-    
-    total_users: int = len(stores) * len(USER_PROFILES) + len(REGIONS)
-    print(f"Provisioning setup complete! {total_users} total users mapped across {len(stores)} stores.")
+    print(f"Provisioning setup complete! Total unique users seed: {len(user_seed_mappings) + len(ACTIVE_MANAGERS)}")
 
 
 if __name__ == "__main__":

@@ -235,3 +235,31 @@ func (h *OperationalHandler) TriggerAlert(c *gin.Context) {
 	}
 	c.JSON(http.StatusCreated, exec)
 }
+
+func (h *OperationalHandler) ClaimTask(c *gin.Context) {
+	executionID := c.Param("id")
+	userID, ok := c.Get("userID")
+	if !ok || userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized user context"})
+		return
+	}
+
+	user, err := h.shiftService.GetUserProfile(c.Request.Context(), userID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve user profile: " + err.Error()})
+		return
+	}
+
+	var roleIDs []string
+	for _, r := range user.Roles {
+		roleIDs = append(roleIDs, r.ID)
+	}
+
+	err = h.taskService.ClaimTask(c.Request.Context(), executionID, userID.(string), roleIDs)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}

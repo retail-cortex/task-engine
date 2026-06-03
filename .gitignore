@@ -6,6 +6,8 @@ Thumbs.db
 bazel-*
 .bazelignore.user
 
+.ijwb
+
 # Go
 *.o
 *.a
@@ -28,10 +30,7 @@ build/
 .pnpm-debug.log*
 
 # Environment Configurations
-.env.local.toml
-.env.local
-.env.*.local
-*.local.toml
+.env.*.toml
 
 scratch
 
@@ -41,3 +40,5 @@ scratch
 *.tfstate.*
 .terraform/
 .terraform.lock.hcl
+*.log
+tf.log

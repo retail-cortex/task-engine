@@ -1,16 +1,16 @@
-# Copyright 2026 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+-- Copyright 2026 Google LLC
+--
+-- Licensed under the Apache License, Version 2.0 (the "License");
+-- you may not use this file except in compliance with the License.
+-- You may obtain a copy of the License at
+--
+--     http://www.apache.org/licenses/LICENSE-2.0
+--
+-- Unless required by applicable law or agreed to in writing, software
+-- distributed under the License is distributed on an "AS IS" BASIS,
+-- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-- See the License for the specific language governing permissions and
+-- limitations under the License.
 
 -- Dev Environment Retail Identities, Events and Shifts Seed Script
 -- Programmatically maps robust operational and administrative datasets
@@ -22,13 +22,14 @@ TRUNCATE TABLE sops CASCADE;
 TRUNCATE TABLE user_event_instances CASCADE;
 TRUNCATE TABLE user_event_schedules CASCADE;
 TRUNCATE TABLE events CASCADE;
-TRUNCATE TABLE user_certifications CASCADE;
-TRUNCATE TABLE user_roles CASCADE;
-TRUNCATE TABLE user_sites CASCADE;
-TRUNCATE TABLE user_organizations CASCADE;
-TRUNCATE TABLE roles CASCADE;
-TRUNCATE TABLE users CASCADE;
 TRUNCATE TABLE tasks CASCADE;
+
+-- Clean specific mock user data (preserving the 553 provisioned Workspace directory profiles)
+DELETE FROM user_certifications WHERE user_id IN ('00000000-0000-0000-0000-000000000000', '88888888-8888-8888-8888-888888880001', '88888888-8888-8888-8888-888888880002', '88888888-8888-8888-8888-888888880003', '88888888-8888-8888-8888-888888880004');
+DELETE FROM user_roles WHERE user_id IN ('00000000-0000-0000-0000-000000000000', '88888888-8888-8888-8888-888888880001', '88888888-8888-8888-8888-888888880002', '88888888-8888-8888-8888-888888880003', '88888888-8888-8888-8888-888888880004');
+DELETE FROM user_sites WHERE user_id IN ('00000000-0000-0000-0000-000000000000', '88888888-8888-8888-8888-888888880001', '88888888-8888-8888-8888-888888880002', '88888888-8888-8888-8888-888888880003', '88888888-8888-8888-8888-888888880004');
+DELETE FROM user_organizations WHERE user_id IN ('00000000-0000-0000-0000-000000000000', '88888888-8888-8888-8888-888888880001', '88888888-8888-8888-8888-888888880002', '88888888-8888-8888-8888-888888880003', '88888888-8888-8888-8888-888888880004');
+DELETE FROM users WHERE id IN ('00000000-0000-0000-0000-000000000000', '88888888-8888-8888-8888-888888880001', '88888888-8888-8888-8888-888888880002', '88888888-8888-8888-8888-888888880003', '88888888-8888-8888-8888-888888880004');
 
 -- 1. Seed Roles
 INSERT INTO roles (id, name, description, created_at) VALUES
@@ -36,7 +37,8 @@ INSERT INTO roles (id, name, description, created_at) VALUES
 	('77777777-7777-7777-7777-777777770002', 'REGION_MANAGER', 'Regional general operations manager. Maps dynamic multi-site selection lists.', NOW()),
 	('77777777-7777-7777-7777-777777770003', 'SITE_MANAGER', 'Physical store site operational supervisor. Audits queues and reviews associate tasks.', NOW()),
 	('77777777-7777-7777-7777-777777770004', 'SITE_ASSOCIATE', 'Standard store workload associate. Executes checklists and trades queue tasks.', NOW()),
-	('77777777-7777-7777-7777-777777770005', 'SITE_3P', 'Third-party vendor logistics checker.', NOW());
+	('77777777-7777-7777-7777-777777770005', 'SITE_3P', 'Third-party vendor logistics checker.', NOW())
+ON CONFLICT (id) DO NOTHING;
 
 -- 2. Seed Users
 INSERT INTO users (id, o_auth_provider, o_auth_id, email, name, metadata, created_at, updated_at, version) VALUES

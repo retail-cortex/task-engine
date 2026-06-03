@@ -12,3 +12,4 @@ Choose from the following manual sections mapping the private business tier layo
 * **[Private Architecture Design](architecture.md)**
 * **[Event Ingestion System Specifications](events.md)**
 * **[Scheduler Heartbeats & Recovery Sweep Engine](scheduler.md)**
+* **[Workspace Directory & Store Mapping Reference](store_information.md)**

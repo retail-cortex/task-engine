@@ -27,6 +27,7 @@ type ShiftService interface {
 	InitializeShift(ctx context.Context, userID, shiftInstanceID string) (*model.ShiftAgentSession, error)
 	UpdateSession(ctx context.Context, session *model.ShiftAgentSession) error
 	ListActiveUsers(ctx context.Context) ([]*model.User, error)
+	ListActiveOnShiftUsers(ctx context.Context, siteID string) ([]*model.User, error)
 	GetUserProfile(ctx context.Context, userID string) (*model.User, error)
 }
 
@@ -89,6 +90,11 @@ func (s *shiftService) UpdateSession(ctx context.Context, session *model.ShiftAg
 func (s *shiftService) ListActiveUsers(ctx context.Context) ([]*model.User, error) {
 	return s.userRepo.List(ctx)
 }
+
+func (s *shiftService) ListActiveOnShiftUsers(ctx context.Context, siteID string) ([]*model.User, error) {
+	return s.userRepo.ListActiveOnShiftUsers(ctx, siteID)
+}
+
 
 func (s *shiftService) GetUserProfile(ctx context.Context, userID string) (*model.User, error) {
 	return s.userRepo.FindByID(ctx, userID)

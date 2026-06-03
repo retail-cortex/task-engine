@@ -13,6 +13,9 @@
 // limitations under the License.
 
 import type { TaskExecution, ChecklistStep, ChatMessage } from '../components/types';
+import { resolveChecklist, normalizeTask, decodeOAuthTokenClaims } from '../lib/utils';
+
+export { resolveChecklist, normalizeTask, decodeOAuthTokenClaims };
 
 // Custom Response Error mapping the HTTP status code (enables dynamic client auth interceptors!)
 export class ResponseError extends Error {
@@ -46,82 +49,24 @@ export const SITE_ID = '55555555-5555-5555-5555-555555550000';
 export const BYPASS_USER_ID = '00000000-0000-0000-0000-000000000000';
 export const SHIFT_SESSION_ID = '11111111-1111-1111-1111-111111111111';
 
-// Resolves and deserialises Checklist JSON States recursively (supports Raw Arrays and Base64 strings)
-export const resolveChecklist = (state: any): ChecklistStep[] => {
-  if (!state) return [];
-  if (Array.isArray(state)) return state;
-  if (typeof state === 'string') {
-    try {
-      const parsed = JSON.parse(state);
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      try {
-        const base64 = atob(state);
-        const parsed = JSON.parse(base64);
-        if (Array.isArray(parsed)) return parsed;
-      } catch {}
-    }
-  }
-  return [];
-};
+// Stateful Session Context inside ApiClient
+let activeToken: string | null = null;
+let activeSiteId: string = SITE_ID;
+let activeUserId: string = BYPASS_USER_ID;
 
-// Normalises dynamic database objects returned by backend GORM schemas into strictly typed TaskExecutions
-export const normalizeTask = (t: any): TaskExecution => {
-  const mappedTemplate = t.Task || t.task || undefined;
-  
-  let rawChecklist = t.checklist_state || t.ChecklistState || '';
-  if (!rawChecklist && mappedTemplate) {
-    const templateChecklist = mappedTemplate.checklist_template || mappedTemplate.ChecklistTemplate || '';
-    rawChecklist = typeof templateChecklist === 'string' ? templateChecklist : JSON.stringify(templateChecklist);
-  }
-  if (!rawChecklist) {
-    rawChecklist = '[]';
-  }
-
-  return {
-    id: t.id || t.ID || '',
-    task_template_id: t.task_template_id || t.TaskTemplateID || '',
-    Task: mappedTemplate,
-    execution_type: t.execution_type || t.ExecutionType || 'STANDARD',
-    status: t.status || t.Status || 'PENDING',
-    priority: t.priority !== undefined ? t.priority : (t.Priority !== undefined ? t.Priority : 3),
-    description: t.description || t.Description || (mappedTemplate ? mappedTemplate.Description : ''),
-    due_at: t.due_at || t.DueAt,
-    checklist_state: rawChecklist,
-    locked_by: t.locked_by || t.LockedBy,
-    locked_at: t.locked_at || t.LockedAt,
-    assignee_id: t.assignee_id || t.AssigneeID || '',
-    retry_count: t.retry_count !== undefined ? t.retry_count : (t.RetryCount !== undefined ? t.RetryCount : 0),
-    max_retries: t.max_retries !== undefined ? t.max_retries : (t.MaxRetries !== undefined ? t.MaxRetries : 3),
-    last_error: t.last_error || t.LastError,
-    created_at: t.created_at || t.CreatedAt || new Date().toISOString()
-  };
-};
-
-// Decodes cryptographically signed Google OAuth ID tokens payloads natively inside the browser context
-export const decodeOAuthTokenClaims = (idToken: string): { name: string; email: string; picture: string | null } | null => {
-  try {
-    const base64Url = idToken.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
-    
-    const claims = JSON.parse(jsonPayload);
-    return {
-      name: claims.name || 'Associate Hanna',
-      email: claims.email || 'hanna@rmcguinness.altostrat.com',
-      picture: claims.picture || null
-    };
-  } catch (e) {
-    console.warn("[OAuth API] Claims extraction error: ", e);
-    return null;
-  }
-};
-
-// Stateless HTTP Client orchestrating all dynamic queries, network headers, and normalisation maps
 export const ApiClient = {
-  getAuthHeaders(token: string | null): Record<string, string> {
+  // App-level Context Setters
+  setToken(token: string | null) {
+    activeToken = token;
+  },
+  setActiveSiteId(siteId: string) {
+    activeSiteId = siteId;
+  },
+  setActiveUserId(userId: string) {
+    activeUserId = userId;
+  },
+
+  getAuthHeaders(token: string | null = activeToken): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json'
     };
@@ -139,49 +84,49 @@ export const ApiClient = {
     return res.json();
   },
 
-  async fetchTasks(token: string | null, siteId: string = SITE_ID): Promise<TaskExecution[]> {
+  async fetchTasks(token: string | null = activeToken, siteId: string = activeSiteId): Promise<TaskExecution[]> {
     const res = await fetch(ENDPOINTS.TASKS(ORG_ID, siteId), { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch active tasks failed", res.status);
     const data = await res.json();
     return Array.isArray(data) ? data.map(normalizeTask) : [];
   },
 
-  async fetchUserProfile(token: string | null): Promise<any> {
+  async fetchUserProfile(token: string | null = activeToken): Promise<any> {
     const res = await fetch(ENDPOINTS.ME(ORG_ID), { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch user profile failed", res.status);
     return res.json();
   },
 
-  async fetchSites(token: string | null): Promise<any[]> {
+  async fetchSites(token: string | null = activeToken): Promise<any[]> {
     const res = await fetch(ENDPOINTS.SITES(ORG_ID), { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch active sites failed", res.status);
     return res.json();
   },
 
-  async fetchUserTasks(token: string | null, siteId: string, userId: string): Promise<TaskExecution[]> {
+  async fetchUserTasks(token: string | null = activeToken, siteId: string = activeSiteId, userId: string = activeUserId): Promise<TaskExecution[]> {
     const res = await fetch(ENDPOINTS.USER_TASKS(ORG_ID, siteId, userId), { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch active user tasks failed", res.status);
     const data = await res.json();
     return Array.isArray(data) ? data.map(normalizeTask) : [];
   },
 
-  async fetchUsers(token: string | null): Promise<any[]> {
+  async fetchUsers(token: string | null = activeToken): Promise<any[]> {
     const res = await fetch(`/api/v1/admin/users`, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch system users failed", res.status);
     return res.json();
   },
 
-  async updateTaskStatus(token: string | null, taskId: string, status: string, checklistState: string): Promise<void> {
-    const res = await fetch(ENDPOINTS.TASK_STATUS(ORG_ID, SITE_ID, taskId), {
+  async updateTaskStatus(token: string | null = activeToken, siteId: string = activeSiteId, taskId: string = '', status: string = '', checklistState: string = ''): Promise<void> {
+    const res = await fetch(ENDPOINTS.TASK_STATUS(ORG_ID, siteId, taskId), {
       method: 'PATCH',
       headers: this.getAuthHeaders(token),
       body: JSON.stringify({ status, checklist_state: checklistState })
     });
-    if (!res.ok) throw new ResponseError("Update task GORM status failed", res.status);
+    if (!res.ok) throw new ResponseError("Update task status failed", res.status);
   },
 
-  async overrideAsset(token: string | null, taskId: string, assetId: string, justification: string): Promise<void> {
-    const res = await fetch(ENDPOINTS.TASK_OVERRIDE(ORG_ID, SITE_ID, taskId), {
+  async overrideAsset(token: string | null = activeToken, siteId: string = activeSiteId, taskId: string = '', assetId: string = '', justification: string = ''): Promise<void> {
+    const res = await fetch(ENDPOINTS.TASK_OVERRIDE(ORG_ID, siteId, taskId), {
       method: 'POST',
       headers: this.getAuthHeaders(token),
       body: JSON.stringify({ asset_id: assetId, justification })
@@ -189,33 +134,41 @@ export const ApiClient = {
     if (!res.ok) throw new ResponseError("Compliance override transaction failed", res.status);
   },
 
-  async proposeTrade(token: string | null, taskId: string, proposedAssigneeId: string): Promise<void> {
-    const res = await fetch(ENDPOINTS.TRADES(ORG_ID, SITE_ID), {
+  async claimTask(token: string | null = activeToken, siteId: string = activeSiteId, taskId: string = ''): Promise<void> {
+    const res = await fetch(`/api/v1/organizations/${ORG_ID}/sites/${siteId}/tasks/${taskId}/claim`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(token)
+    });
+    if (!res.ok) throw new ResponseError("Task claim action failed", res.status);
+  },
+
+  async proposeTrade(token: string | null = activeToken, siteId: string = activeSiteId, taskId: string = '', proposedAssigneeId: string = ''): Promise<void> {
+    const res = await fetch(ENDPOINTS.TRADES(ORG_ID, siteId), {
       method: 'POST',
       headers: this.getAuthHeaders(token),
       body: JSON.stringify({ task_execution_id: taskId, proposed_assignee_id: proposedAssigneeId })
     });
-    if (!res.ok) throw new ResponseError("GORM trades ledger proposal failed", res.status);
+    if (!res.ok) throw new ResponseError("Trades ledger proposal failed", res.status);
   },
 
-  async acceptTrade(token: string | null, tradeId: string): Promise<void> {
-    const res = await fetch(`${ENDPOINTS.TRADES(ORG_ID, SITE_ID)}/${tradeId}/accept`, {
+  async acceptTrade(token: string | null = activeToken, siteId: string = activeSiteId, tradeId: string = ''): Promise<void> {
+    const res = await fetch(`${ENDPOINTS.TRADES(ORG_ID, siteId)}/${tradeId}/accept`, {
       method: 'POST',
       headers: this.getAuthHeaders(token)
     });
-    if (!res.ok) throw new ResponseError("GORM trade acceptance failed", res.status);
+    if (!res.ok) throw new ResponseError("Trade acceptance failed", res.status);
   },
 
-  async rejectTrade(token: string | null, tradeId: string): Promise<void> {
-    const res = await fetch(`${ENDPOINTS.TRADES(ORG_ID, SITE_ID)}/${tradeId}/reject`, {
+  async rejectTrade(token: string | null = activeToken, siteId: string = activeSiteId, tradeId: string = ''): Promise<void> {
+    const res = await fetch(`${ENDPOINTS.TRADES(ORG_ID, siteId)}/${tradeId}/reject`, {
       method: 'POST',
       headers: this.getAuthHeaders(token)
     });
-    if (!res.ok) throw new ResponseError("GORM trade rejection failed", res.status);
+    if (!res.ok) throw new ResponseError("Trade rejection failed", res.status);
   },
 
-  async postChatMessage(token: string | null, text: string): Promise<any> {
-    const res = await fetch(ENDPOINTS.CHAT_MESSAGE(ORG_ID, SITE_ID, BYPASS_USER_ID, SHIFT_SESSION_ID), {
+  async postChatMessage(token: string | null = activeToken, text: string = '', siteId: string = activeSiteId, userId: string = activeUserId): Promise<any> {
+    const res = await fetch(ENDPOINTS.CHAT_MESSAGE(ORG_ID, siteId, userId, SHIFT_SESSION_ID), {
       method: 'POST',
       headers: this.getAuthHeaders(token),
       body: JSON.stringify({ message: text })
@@ -224,13 +177,13 @@ export const ApiClient = {
     return res.json();
   },
 
-  async fetchSchedulerStatus(token: string | null): Promise<any> {
+  async fetchSchedulerStatus(token: string | null = activeToken): Promise<any> {
     const res = await fetch(ENDPOINTS.SCHEDULER_STATUS, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Diagnostics polling status failed", res.status);
     return res.json();
   },
 
-  async triggerSchedulerSweep(token: string | null): Promise<void> {
+  async triggerSchedulerSweep(token: string | null = activeToken): Promise<void> {
     const res = await fetch(ENDPOINTS.SCHEDULER_TRIGGER, {
       method: 'POST',
       headers: this.getAuthHeaders(token)
@@ -238,8 +191,8 @@ export const ApiClient = {
     if (!res.ok) throw new ResponseError("Forced background cron sweep trigger failed", res.status);
   },
 
-  async triggerStreamingAlert(token: string | null, organizerID: string, eventType: string, description: string): Promise<any> {
-    const res = await fetch(ENDPOINTS.ALERTS(ORG_ID, SITE_ID), {
+  async triggerStreamingAlert(token: string | null = activeToken, siteId: string = activeSiteId, organizerID: string = '', eventType: string = '', description: string = ''): Promise<any> {
+    const res = await fetch(ENDPOINTS.ALERTS(ORG_ID, siteId), {
       method: 'POST',
       headers: this.getAuthHeaders(token),
       body: JSON.stringify({ organizer_id: organizerID, event_type: eventType, description })

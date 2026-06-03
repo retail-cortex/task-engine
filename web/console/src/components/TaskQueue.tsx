@@ -20,10 +20,7 @@ interface TaskQueueProps {
   selectedTask: TaskExecution | null;
   onSelectTask: (task: TaskExecution) => void;
   onTradeTask?: (task: TaskExecution) => void;
-  showAssigneeFilter?: boolean;
-  activeCoworkers?: any[];
-  selectedAssigneeFilter?: string;
-  onAssigneeFilterChange?: (assigneeID: string) => void;
+  onTakeTask?: (task: TaskExecution) => void;
 }
 
 const TaskQueue: React.FC<TaskQueueProps> = ({
@@ -31,10 +28,7 @@ const TaskQueue: React.FC<TaskQueueProps> = ({
   selectedTask,
   onSelectTask,
   onTradeTask,
-  showAssigneeFilter = false,
-  activeCoworkers = [],
-  selectedAssigneeFilter = "ALL",
-  onAssigneeFilterChange
+  onTakeTask,
 }: TaskQueueProps) => {
 
   // Local state tracking copied ID targets (enables beautiful post-copy dynamic visual confirmations!)
@@ -71,40 +65,9 @@ const TaskQueue: React.FC<TaskQueueProps> = ({
 
   return (
     <section className="panel-card span-left">
-      <div className="panel-header" style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'stretch' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-          <h2 className="panel-title">Operational Task Queue</h2>
-          <span className="panel-title-count">{tasks.length} Active</span>
-        </div>
-
-        {showAssigneeFilter && activeCoworkers.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--input-bg)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--panel-border)', width: '100%', marginTop: 4 }}>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 700 }}>Assignee:</span>
-            <select
-              className="a2ui-form-select"
-              style={{
-                flex: 1,
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-primary)',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                outline: 'none',
-                padding: 0
-              }}
-              value={selectedAssigneeFilter}
-              onChange={(e) => onAssigneeFilterChange && onAssigneeFilterChange(e.target.value)}
-            >
-              <option value="ALL" style={{ background: '#0c0e1c', color: 'var(--text-primary)' }}>All Site Coworkers</option>
-              {activeCoworkers.map((u: any) => (
-                <option key={u.id || u.ID} value={u.id || u.ID} style={{ background: '#0c0e1c', color: 'var(--text-primary)' }}>
-                  {u.name || u.Name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+      <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 className="panel-title">Operational Task Queue</h2>
+        <span className="panel-title-count">{tasks.length} Active</span>
       </div>
       <div className="panel-body-scrollable">
         {tasks.map((t) => {
@@ -196,10 +159,35 @@ const TaskQueue: React.FC<TaskQueueProps> = ({
                     </button>
                   )}
 
-                  {t.status === 'COMPLETED' ? (
+                   {t.status === 'COMPLETED' ? (
                     <span style={{ color: 'var(--priority-standard)', fontWeight: 600 }}>COMPLETED</span>
                   ) : t.status === 'TRADE_PENDING' ? (
-                    <span style={{ color: '#ec9f22', fontWeight: 600 }}>TRADE PENDING</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button
+                        type="button"
+                        className="task-take-action-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onTakeTask) onTakeTask(t);
+                        }}
+                        title="Take task to assign it to yourself and resolve pending trade swap"
+                        style={{
+                          background: 'var(--priority-standard-glow)',
+                          border: '1px solid var(--priority-standard)',
+                          borderRadius: 4,
+                          color: 'var(--priority-standard)',
+                          fontSize: '0.72rem',
+                          padding: '2px 8px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          letterSpacing: '0.02em',
+                          transition: 'all 0.2s ease-in-out'
+                        }}
+                      >
+                        TAKE
+                      </button>
+                      <span style={{ color: '#ec9f22', fontWeight: 600 }}>TRADE PENDING</span>
+                    </div>
                   ) : t.status === 'IN_PROGRESS' ? (
                     <span style={{ color: 'var(--priority-high)', fontWeight: 600 }}>IN_PROGRESS</span>
                   ) : (

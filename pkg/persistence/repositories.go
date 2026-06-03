@@ -29,6 +29,7 @@ type UserRepository interface {
 	Update(ctx context.Context, u *model.User) error
 	AddRole(ctx context.Context, userID, roleID string) error
 	List(ctx context.Context) ([]*model.User, error)
+	ListActiveOnShiftUsers(ctx context.Context, siteID string) ([]*model.User, error)
 	CreateRole(ctx context.Context, r *model.Role) error
 	ListRoles(ctx context.Context) ([]*model.Role, error)
 }
@@ -73,6 +74,7 @@ type TaskExecutionRepository interface {
 	FindTradeByID(ctx context.Context, id string) (*model.TaskTrade, error)
 	UpdateTrade(ctx context.Context, t *model.TaskTrade) error
 	FindPendingTradesForUser(ctx context.Context, userID string) ([]*model.TaskTrade, error)
+	FindPendingTradeByExecution(ctx context.Context, executionID string) (*model.TaskTrade, error)
 	CreateAudit(ctx context.Context, a *model.TaskExecutionAudit) error
 }
 
@@ -130,6 +132,21 @@ func (r *userRepository) List(ctx context.Context) ([]*model.User, error) {
 	err := r.db.WithContext(ctx).Preload("Roles").Preload("Organizations").Preload("Sites").Find(&users).Error
 	return users, err
 }
+
+func (r *userRepository) ListActiveOnShiftUsers(ctx context.Context, siteID string) ([]*model.User, error) {
+	var users []*model.User
+	err := r.db.WithContext(ctx).
+		Preload("Roles").
+		Preload("Organizations").
+		Preload("Sites").
+		Joins("JOIN user_event_schedules ON user_event_schedules.user_id = users.id").
+		Joins("JOIN user_event_instances ON user_event_instances.schedule_id = user_event_schedules.id").
+		Joins("JOIN events ON events.id = user_event_schedules.event_id").
+		Where("events.site_id = ? AND events.event_type = 'RetailShift' AND user_event_instances.event_status = 'EventActive'", siteID).
+		Find(&users).Error
+	return users, err
+}
+
 
 func (r *userRepository) CreateRole(ctx context.Context, role *model.Role) error {
 	return r.db.WithContext(ctx).Create(role).Error
@@ -335,6 +352,12 @@ func (r *taskExecutionRepository) FindPendingTradesForUser(ctx context.Context, 
 	var trades []*model.TaskTrade
 	err := r.db.WithContext(ctx).Where("proposed_assignee_id = ? AND status = 'PENDING'", userID).Find(&trades).Error
 	return trades, err
+}
+
+func (r *taskExecutionRepository) FindPendingTradeByExecution(ctx context.Context, executionID string) (*model.TaskTrade, error) {
+	var t model.TaskTrade
+	err := r.db.WithContext(ctx).Where("task_execution_id = ? AND status = 'PENDING'", executionID).First(&t).Error
+	return &t, err
 }
 
 func (r *taskExecutionRepository) CreateAudit(ctx context.Context, a *model.TaskExecutionAudit) error {

@@ -15,7 +15,7 @@
 # Terraform Outputs Definitions for Retail Personnel Provisioning
 
 output "parent_org_unit" {
-  value       = googleworkspace_org_unit.root_stores.org_unit_path
+  value       = "/Stores"
   description = "The parent organization unit branch path target."
 }
 
@@ -25,18 +25,32 @@ output "total_stores_processed" {
 }
 
 output "total_users_provisioned" {
-  value       = length(googleworkspace_user.users)
+  value       = length(var.test_stores) * 5 + length(var.regional_managers)
   description = "The absolute count of active domain user login profiles provisioned."
 }
 
-output "store_groups" {
+output "store_role_groups" {
   value = {
-    for store_id, group in google_cloud_identity_group.store_groups :
-    store_id => {
+    for key, group in google_cloud_identity_group.store_role_groups :
+    key => {
       name        = group.display_name
       email       = group.group_key[0].id
       description = group.description
     }
   }
-  description = "Operational Cloud Identity Groups mapped to storefronts, used to link GCP IAM access dynamically."
+  description = "Operational role-based Cloud Identity Groups mapped to storefront roles, used to link GCP IAM access dynamically."
 }
+
+output "regional_groups" {
+  value = {
+    for reg, group in google_cloud_identity_group.regional_groups :
+    reg => {
+      name  = group.display_name
+      email = group.group_key[0].id
+    }
+  }
+  description = "Regional Security Groups representing 6 US footprint divisions."
+}
+
+
+

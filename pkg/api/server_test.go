@@ -36,6 +36,7 @@ type mockAdminService struct {
 	CreateRoleFunc               func(ctx context.Context, role *model.Role) error
 	AssignRoleFunc               func(ctx context.Context, userID, roleID string) error
 	RegisterUserFunc             func(ctx context.Context, user *model.User) error
+	UpdateUserFunc               func(ctx context.Context, user *model.User) error
 	RegisterLocationFunc         func(ctx context.Context, loc *model.Location) error
 	RegisterAssetFunc            func(ctx context.Context, asset *model.Asset) error
 	CreateTaskTemplateFunc       func(ctx context.Context, task *model.Task) error
@@ -78,6 +79,13 @@ func (m *mockAdminService) AssignRole(ctx context.Context, userID, roleID string
 func (m *mockAdminService) RegisterUser(ctx context.Context, user *model.User) error {
 	if m.RegisterUserFunc != nil {
 		return m.RegisterUserFunc(ctx, user)
+	}
+	return nil
+}
+
+func (m *mockAdminService) UpdateUser(ctx context.Context, user *model.User) error {
+	if m.UpdateUserFunc != nil {
+		return m.UpdateUserFunc(ctx, user)
 	}
 	return nil
 }
@@ -149,6 +157,7 @@ type mockTaskService struct {
 	ListPendingTradesFunc       func(ctx context.Context, userID string) ([]*model.TaskTrade, error)
 	AcceptTradeFunc            func(ctx context.Context, tradeID, targetUserID string) error
 	RejectTradeFunc            func(ctx context.Context, tradeID, targetUserID string) error
+	ClaimTaskFunc              func(ctx context.Context, executionID, userID string, userRoleIDs []string) error
 	ListActiveSitesFunc         func(ctx context.Context) ([]*model.Site, error)
 }
 
@@ -229,11 +238,19 @@ func (m *mockTaskService) RejectTrade(ctx context.Context, tradeID, targetUserID
 	return nil
 }
 
+func (m *mockTaskService) ClaimTask(ctx context.Context, executionID, userID string, userRoleIDs []string) error {
+	if m.ClaimTaskFunc != nil {
+		return m.ClaimTaskFunc(ctx, executionID, userID, userRoleIDs)
+	}
+	return nil
+}
+
 type mockShiftService struct {
-	InitializeShiftFunc func(ctx context.Context, userID, shiftInstanceID string) (*model.ShiftAgentSession, error)
-	UpdateSessionFunc   func(ctx context.Context, session *model.ShiftAgentSession) error
-	ListActiveUsersFunc func(ctx context.Context) ([]*model.User, error)
-	GetUserProfileFunc  func(ctx context.Context, userID string) (*model.User, error)
+	InitializeShiftFunc    func(ctx context.Context, userID, shiftInstanceID string) (*model.ShiftAgentSession, error)
+	UpdateSessionFunc      func(ctx context.Context, session *model.ShiftAgentSession) error
+	ListActiveUsersFunc    func(ctx context.Context) ([]*model.User, error)
+	ListActiveOnShiftUsersFunc func(ctx context.Context, siteID string) ([]*model.User, error)
+	GetUserProfileFunc     func(ctx context.Context, userID string) (*model.User, error)
 }
 
 func (m *mockShiftService) InitializeShift(ctx context.Context, userID, shiftInstanceID string) (*model.ShiftAgentSession, error) {
@@ -253,6 +270,13 @@ func (m *mockShiftService) UpdateSession(ctx context.Context, session *model.Shi
 func (m *mockShiftService) ListActiveUsers(ctx context.Context) ([]*model.User, error) {
 	if m.ListActiveUsersFunc != nil {
 		return m.ListActiveUsersFunc(ctx)
+	}
+	return nil, nil
+}
+
+func (m *mockShiftService) ListActiveOnShiftUsers(ctx context.Context, siteID string) ([]*model.User, error) {
+	if m.ListActiveOnShiftUsersFunc != nil {
+		return m.ListActiveOnShiftUsersFunc(ctx, siteID)
 	}
 	return nil, nil
 }

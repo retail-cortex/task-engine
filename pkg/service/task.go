@@ -37,6 +37,7 @@ type TaskService interface {
 	ListPendingTrades(ctx context.Context, userID string) ([]*model.TaskTrade, error)
 	AcceptTrade(ctx context.Context, tradeID, targetUserID string) error
 	RejectTrade(ctx context.Context, tradeID, targetUserID string) error
+	ClaimTask(ctx context.Context, executionID, userID string, userRoleIDs []string) error
 	ListActiveSites(ctx context.Context) ([]*model.Site, error)
 }
 
@@ -294,5 +295,78 @@ func (s *taskService) RejectTrade(ctx context.Context, tradeID, targetUserID str
 	}
 
 	trade.Status = "REJECTED"
+	return s.execRepo.UpdateTrade(ctxWithUser, trade)
+}
+
+func (s *taskService) ClaimTask(ctx context.Context, executionID, userID string, userRoleIDs []string) error {
+	ctxWithUser := context.WithValue(ctx, "userID", userID)
+
+	exec, err := s.execRepo.FindByID(ctxWithUser, executionID)
+	if err != nil {
+		return fmt.Errorf("failed to find task execution: %w", err)
+	}
+
+	if exec.Status != "TRADE_PENDING" {
+		return errors.New("task is not pending a trade")
+	}
+
+	// 1. Find the active pending trade record for this execution
+	trade, err := s.execRepo.FindPendingTradeByExecution(ctxWithUser, executionID)
+	if err != nil {
+		return fmt.Errorf("failed to find pending trade record for this execution: %w", err)
+	}
+
+	// 2. Validate if user is authorized to take this task:
+	// - If the user is the original initiator of the trade swap (trade.InitiatorID == userID), they are allowed to take it back.
+	// - OR, if the task does not enforce target roles (TargetRoleID is nil or empty).
+	// - OR, if the user possesses the TargetRoleID.
+	isAuthorized := false
+	if trade.InitiatorID == userID {
+		isAuthorized = true
+	} else if exec.Task.TargetRoleID == nil || *exec.Task.TargetRoleID == "" {
+		isAuthorized = true
+	} else {
+		for _, rID := range userRoleIDs {
+			if rID == *exec.Task.TargetRoleID {
+				isAuthorized = true
+				break
+			}
+		}
+	}
+
+	if !isAuthorized {
+		return errors.New("unauthorized: you do not possess the eligible operational role required to take this task")
+	}
+
+	// 3. Reassign assignee to the claiming user
+	exec.AssigneeID = &userID
+
+	// 4. Reset status based on completed steps
+	hasCompletedSteps := false
+	if len(exec.ChecklistState) > 0 {
+		var checklist []map[string]interface{}
+		if err := json.Unmarshal(exec.ChecklistState, &checklist); err == nil {
+			for _, step := range checklist {
+				if comp, ok := step["completed"].(bool); ok && comp {
+					hasCompletedSteps = true
+					break
+				}
+			}
+		}
+	}
+	if hasCompletedSteps {
+		exec.Status = "IN_PROGRESS"
+	} else {
+		exec.Status = "PENDING"
+	}
+
+	// 5. Save task execution
+	if err := s.execRepo.Update(ctxWithUser, exec); err != nil {
+		return fmt.Errorf("failed to update task execution assignee: %w", err)
+	}
+
+	// 6. Close the trade record
+	trade.Status = "APPROVED"
+	trade.ProposedAssigneeID = userID
 	return s.execRepo.UpdateTrade(ctxWithUser, trade)
 }

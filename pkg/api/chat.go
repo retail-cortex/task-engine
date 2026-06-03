@@ -173,7 +173,8 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		pendingTrades, errTrades := h.taskService.ListPendingTrades(c.Request.Context(), userID)
 		orgID := c.Param("orgId")
 
-		if errTrades == nil && len(pendingTrades) > 0 {
+		isExplicitProposal := strings.Contains(lower, "propose") || strings.Contains(lower, "for task")
+		if errTrades == nil && len(pendingTrades) > 0 && !isExplicitProposal {
 			replyContent = fmt.Sprintf("You have %d pending task trade handover proposals waiting for your review. Complete the maker/checker verification below to accept or deny.", len(pendingTrades))
 			a2uiType = "TRADE"
 
@@ -259,7 +260,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 			}
 		} else {
 			// Propose Trade Form Intent: Query GORM active user profiles dynamically to construct the coworker assignees selector
-			usersList, err := h.shiftService.ListActiveUsers(c.Request.Context())
+			usersList, err := h.shiftService.ListActiveOnShiftUsers(c.Request.Context(), siteID)
 
 			var selectOptions []interface{}
 			if err == nil && len(usersList) > 0 {
@@ -274,12 +275,43 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 				}
 			}
 
-			// Fail-safe fallbacks if database is in cold startup mode or no coworkers are registered on site
+			// Fail-safe fallbacks if no active on-shift coworkers are found:
+			// Fall back to listing any coworkers registered/assigned to this specific site location (even if off-shift)
+			if len(selectOptions) == 0 {
+				allUsersAtSite, errAll := h.shiftService.ListActiveUsers(c.Request.Context())
+				if errAll == nil {
+					for _, u := range allUsersAtSite {
+						if u.ID != "00000000-0000-0000-0000-000000000000" && u.ID != userID && u.Name != "" {
+							assignedToActiveSite := false
+							for _, s := range u.Sites {
+								if s.ID == siteID {
+									assignedToActiveSite = true
+									break
+								}
+							}
+							if assignedToActiveSite {
+								selectOptions = append(selectOptions, map[string]interface{}{
+									"label": fmt.Sprintf("%s (%s)", u.Name, u.Email),
+									"value": u.ID,
+								})
+							}
+						}
+					}
+				}
+			}
+
+			// If still empty, add a placeholder to prevent array index out of bounds panic
+			var defaultValue string
 			if len(selectOptions) == 0 {
 				selectOptions = []interface{}{
-					map[string]interface{}{"label": "Ryan (Supervisor - Seattle #2005)", "value": "88888888-8888-8888-8888-888888880002"},
-					map[string]interface{}{"label": "Jenna (Associate - San Francisco #1001)", "value": "88888888-8888-8888-8888-888888880003"},
+					map[string]interface{}{
+						"label": "No eligible store coworkers available for task trades",
+						"value": "",
+					},
 				}
+				defaultValue = ""
+			} else {
+				defaultValue = selectOptions[0].(map[string]interface{})["value"].(string)
 			}
 
 			var taskExecutionIDVal string
@@ -290,7 +322,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 				taskExecutionIDVal = matchedTaskID
 			}
 
-			replyContent = "Operational task trade proposal portal resolved dynamically. Select active coworker assignee profiles and enter a target task execution ID to authorize handovers transaction under GORM maker/checker guidelines."
+			replyContent = "Operational task trade proposal portal resolved dynamically. Select active coworker assignee profiles and enter a target task execution ID to authorize handovers transaction."
 			a2uiType = "TRADE"
 			a2uiData = map[string]interface{}{
 				"type":  "card",
@@ -305,7 +337,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 								"type":    "select",
 								"label":   "Target Coworker Colleague Profile",
 								"name":    "proposedAssigneeID",
-								"value":   selectOptions[0].(map[string]interface{})["value"].(string),
+								"value":   defaultValue,
 								"options": selectOptions,
 							},
 							map[string]interface{}{
@@ -313,7 +345,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 								"label":       "Target Task Execution ID to Trade",
 								"name":        "taskExecutionID",
 								"value":       taskExecutionIDVal,
-								"placeholder": "Enter task GORM UUID index, e.g. exec-manual-trigger-trade",
+								"placeholder": "Enter task UUID index, e.g. exec-manual-trigger-trade",
 							},
 							map[string]interface{}{
 								"type":  "row",
@@ -545,7 +577,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		sitesList, err := h.taskService.ListActiveSites(c.Request.Context())
 		
 		var selectOptions []interface{}
-		var textList string = "Active physical retail storefronts and their associated regional ICAO airport codes loaded dynamically from active GORM database records:\n\n"
+		var textList string = "Active physical retail storefronts and their associated regional ICAO airport codes loaded dynamically from active database records:\n\n"
 		
 		if err == nil && len(sitesList) > 0 {
 			for i, s := range sitesList {
@@ -558,7 +590,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 			}
 		} else {
 			// Fallback options if database is not seeded yet
-			textList = "No active retail sites seeded on the GORM database. Initializing fallback regional targets:\n\n"
+			textList = "No active retail sites found in the system. Initializing fallback regional targets:\n\n"
 			fallbacks := []struct{ Name, Code, Addr string }{
 				{"OmniMart - Store #1000 (Dallas)", "KDFW", "100 Retail Way, Dallas, TX"},
 				{"Volt & Vine - San Francisco", "KSFO", "555 California St, San Francisco, CA"},
@@ -610,7 +642,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		}
 	} else if strings.Contains(lower, "action") || strings.Contains(lower, "available") || strings.Contains(lower, "help") || strings.Contains(lower, "what can i do") || strings.Contains(lower, "trigger") {
 		// Actions Dispatcher Board Intent: Return a beautiful A2UI dispatcher card allowing interactive triggering of trade propositions, background cron sweeps, and streaming events!
-		replyContent = "Nexus Operations Control Dispatch Board resolved dynamically. You can initiate a peer-to-peer task trade proposal dynamically using live GORM user states, force an immediate background database sweep (scheduler cron sweep), or simulate a register drawer cash limits empty alarm event."
+		replyContent = "Nexus Operations Control Dispatch Board resolved dynamically. You can trigger trade handovers, background cron sweeps, sensor event ingestion, weather observations, store selection, role & assignee filters, or compliance SOP searches."
 		a2uiType = "ACTIONS"
 		a2uiData = map[string]interface{}{
 			"type":  "card",
@@ -640,7 +672,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 					"type": "column",
 					"gap":  8,
 					"children": []interface{}{
-						map[string]interface{}{"type": "text", "content": "Force background scheduler cron sweeps sweeps to execute pending batch jobs, update lock watchdogs, and generate ad-hoc records.", "style": "secondary"},
+						map[string]interface{}{"type": "text", "content": "Force background scheduler sweeps to execute pending batch jobs, update lock watchdogs, and generate ad-hoc records.", "style": "secondary"},
 						map[string]interface{}{
 							"type":  "row",
 							"align": "start",
@@ -659,7 +691,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 					"type": "column",
 					"gap":  8,
 					"children": []interface{}{
-						map[string]interface{}{"type": "text", "content": "Ingest dynamic, ad-hoc streaming alert events directly inside GORM active database queues.", "style": "secondary"},
+						map[string]interface{}{"type": "text", "content": "Ingest dynamic, ad-hoc streaming alert events directly inside active database queues.", "style": "secondary"},
 						map[string]interface{}{
 							"type":  "row",
 							"align": "start",
@@ -669,6 +701,76 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 									"label":  "Open Dynamic Ingestion Portal",
 									"style":  "critical",
 									"action": "OPEN_EVENT_FORM",
+								},
+							},
+						},
+					},
+				},
+				map[string]interface{}{
+					"type": "column",
+					"gap":  8,
+					"children": []interface{}{
+						map[string]interface{}{"type": "text", "content": "Query real-time meteorological conditions and METAR airport observations.", "style": "secondary"},
+						map[string]interface{}{
+							"type":  "row",
+							"align": "start",
+							"children": []interface{}{
+								map[string]interface{}{
+									"type":   "button",
+									"label":  "Open Regional Observer Portal",
+									"style":  "primary",
+									"action": "OPEN_WEATHER_FORM",
+								},
+							},
+						},
+					},
+				},
+				map[string]interface{}{
+					"type": "column",
+					"gap":  8,
+					"children": []interface{}{
+						map[string]interface{}{"type": "text", "content": "Search the standard compliance and operating guidelines (SOP) vector database.", "style": "secondary"},
+						map[string]interface{}{
+							"type":  "row",
+							"align": "start",
+							"children": []interface{}{
+								map[string]interface{}{
+									"type":   "button",
+									"label":  "Search SOP Guidelines",
+									"style":  "primary",
+									"action": "OPEN_SOP_SEARCH",
+								},
+							},
+						},
+					},
+				},
+				map[string]interface{}{
+					"type": "column",
+					"gap":  8,
+					"children": []interface{}{
+						map[string]interface{}{"type": "text", "content": "Scope, filter, or switch active storefront sites, associate assignments, and user roles.", "style": "secondary"},
+						map[string]interface{}{
+							"type":  "row",
+							"align": "start",
+							"gap":   6,
+							"children": []interface{}{
+								map[string]interface{}{
+									"type":   "button",
+									"label":  "Change Active Site",
+									"style":  "primary",
+									"action": "OPEN_STORE_SELECTOR",
+								},
+								map[string]interface{}{
+									"type":   "button",
+									"label":  "Filter by Role",
+									"style":  "primary",
+									"action": "OPEN_ROLE_SELECTOR",
+								},
+								map[string]interface{}{
+									"type":   "button",
+									"label":  "Filter by Assignee",
+									"style":  "primary",
+									"action": "OPEN_ASSIGNEE_SELECTOR",
 								},
 							},
 						},
@@ -715,7 +817,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 			}
 		}
 
-		replyContent = "Ingestion portal initialized! Please fill out the dynamic sensor parameters form below. Custom dropdown options are pulled dynamically from active GORM database templates, completely free of UI simulation fiction."
+		replyContent = "Ingestion portal initialized! Please fill out the dynamic sensor parameters form below. Custom dropdown options are pulled dynamically from active database templates, completely free of UI simulation fiction."
 		a2uiType = "FORM"
 		a2uiData = map[string]interface{}{
 			"type":  "card",
@@ -761,6 +863,164 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 				},
 			},
 		}
+	} else if strings.Contains(lower, "select store") || strings.Contains(lower, "change store") || strings.Contains(lower, "switch store") || (strings.Contains(lower, "select") && strings.Contains(lower, "store")) {
+		// Fetch all sites globally to construct dynamic store switcher pills in chat!
+		sites, err := h.taskService.ListActiveSites(c.Request.Context())
+		if err == nil && len(sites) > 0 {
+			replyContent = "Please select an operational retail storefront context from the active directory below to switch your active dashboard view:"
+			a2uiType = "STORE_SELECTOR"
+			
+			var buttons []interface{}
+			for _, s := range sites {
+				buttons = append(buttons, map[string]interface{}{
+					"type":   "button",
+					"label":  s.Name,
+					"style":  "primary",
+					"action": "SET_STORE",
+					"actionData": map[string]interface{}{
+						"siteID":    s.ID,
+						"siteLabel": s.Name,
+					},
+				})
+			}
+			
+			a2uiData = map[string]interface{}{
+				"type":  "card",
+				"title": "RETAIL STOREFRONT CONTEXT SWITCHER",
+				"style": "primary",
+				"children": []interface{}{
+					map[string]interface{}{
+						"type":     "column",
+						"gap":      8,
+						"children": buttons,
+					},
+				},
+			}
+		} else {
+			replyContent = "Store switcher context is currently unavailable. Please use the Store selector located in the main dashboard header."
+		}
+	} else if strings.Contains(lower, "filter by role") || strings.Contains(lower, "select role") || strings.Contains(lower, "change role") {
+		replyContent = "Select a standard retail operational role filter from the options below to scope your local task queue:"
+		a2uiType = "ROLE_SELECTOR"
+		a2uiData = map[string]interface{}{
+			"type":  "card",
+			"title": "ROLE FILTER MANAGER",
+			"style": "primary",
+			"children": []interface{}{
+				map[string]interface{}{
+					"type": "column",
+					"gap":  8,
+					"children": []interface{}{
+						map[string]interface{}{
+							"type":   "button",
+							"label":  "All Store Roles",
+							"style":  "secondary",
+							"action": "SET_ROLE",
+							"actionData": map[string]interface{}{
+								"role":      "ALL",
+								"roleLabel": "All Roles",
+							},
+						},
+						map[string]interface{}{
+							"type":   "button",
+							"label":  "Store Managers (SITE_MANAGER)",
+							"style":  "primary",
+							"action": "SET_ROLE",
+							"actionData": map[string]interface{}{
+								"role":      "SITE_MANAGER",
+								"roleLabel": "Store Managers",
+							},
+						},
+						map[string]interface{}{
+							"type":   "button",
+							"label":  "Storefront Associates (SITE_ASSOCIATE)",
+							"style":  "primary",
+							"action": "SET_ROLE",
+							"actionData": map[string]interface{}{
+								"role":      "SITE_ASSOCIATE",
+								"roleLabel": "Storefront Associates",
+							},
+						},
+						map[string]interface{}{
+							"type":   "button",
+							"label":  "Corporate Administrators (ADMIN)",
+							"style":  "primary",
+							"action": "SET_ROLE",
+							"actionData": map[string]interface{}{
+								"role":      "ADMIN",
+								"roleLabel": "Corporate Administrators",
+							},
+						},
+					},
+				},
+			},
+		}
+	} else if strings.Contains(lower, "filter by assignee") || strings.Contains(lower, "filter by colleague") || strings.Contains(lower, "select associate") || strings.Contains(lower, "select coworker") || (strings.Contains(lower, "filter") && strings.Contains(lower, "user")) {
+		// Fetch active store coworkers
+		coworkers, err := h.shiftService.ListActiveUsers(c.Request.Context())
+		if err == nil && len(coworkers) > 0 {
+			replyContent = "Select a specific store coworker from the list below to view their assigned operational workload checklist:"
+			a2uiType = "ASSIGNEE_SELECTOR"
+			
+			var buttons []interface{}
+			buttons = append(buttons, map[string]interface{}{
+				"type":   "button",
+				"label":  "All Coworkers",
+				"style":  "secondary",
+				"action": "SET_ASSIGNEE",
+				"actionData": map[string]interface{}{
+					"assigneeID":   "ALL",
+					"assigneeName": "All Coworkers",
+				},
+			})
+			
+			siteID := c.Query("siteId")
+			if siteID == "" {
+				siteID = c.Param("siteId")
+			}
+			if siteID == "" {
+				siteID = "44444444-4444-4444-4444-444444440000" // Seattle fallback
+			}
+			
+			for _, u := range coworkers {
+				// Avoid returning mock or empty profiles, and filter for only users assigned to the current active site!
+				assignedToActiveSite := false
+				for _, s := range u.Sites {
+					if s.ID == siteID {
+						assignedToActiveSite = true
+						break
+					}
+				}
+				
+				if u.ID != "00000000-0000-0000-0000-000000000000" && u.ID != userID && u.Name != "" && assignedToActiveSite {
+					buttons = append(buttons, map[string]interface{}{
+						"type":   "button",
+						"label":  fmt.Sprintf("%s (%s)", u.Name, u.Email),
+						"style":  "primary",
+						"action": "SET_ASSIGNEE",
+						"actionData": map[string]interface{}{
+							"assigneeID":   u.ID,
+							"assigneeName": u.Name,
+						},
+					})
+				}
+			}
+			
+			a2uiData = map[string]interface{}{
+				"type":  "card",
+				"title": "COWORKER ASSIGNEE SELECTOR",
+				"style": "primary",
+				"children": []interface{}{
+					map[string]interface{}{
+						"type":     "column",
+						"gap":      8,
+						"children": buttons,
+					},
+				},
+			}
+		} else {
+			replyContent = "Coworker directory is currently unavailable. Please check database seeding status."
+		}
 	} else if strings.Contains(lower, "sop") || strings.Contains(lower, "guidelines") || strings.Contains(lower, "rule") || strings.Contains(lower, "freshness") {
 		// SOP Vector Similarity RAG Query: Execute actual pgvector cosine checks on AlloyDB/Postgres
 		mockVector := make(model.Float32Vector, 768)
@@ -799,12 +1059,12 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 							"children": []interface{}{
 								map[string]interface{}{
 									"type":   "button",
-									"label":  "Spawn GORM Compliance Audit Checklist",
+									"label":  "Spawn Compliance Audit Checklist",
 									"style":  "primary",
 									"action": "SPAWN_SOP_TASK",
 									"actionData": map[string]interface{}{
 										"sopProcessID": cleanSOPProcessID,
-										"description":  fmt.Sprintf("Auditing GORM guidelines checklist for SOP Process: %s. Compliance summary: %s", cleanSOPProcessID, snippet),
+										"description":  fmt.Sprintf("Auditing guidelines checklist for SOP Process: %s. Compliance summary: %s", cleanSOPProcessID, snippet),
 									},
 								},
 							},

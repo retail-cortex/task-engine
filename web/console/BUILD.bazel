@@ -56,5 +56,6 @@ vite_bin.vite_binary(
         "public/**/*",
         "src/**/*",
     ]),
+    tags = ["ibazel_notify_changes"],
     visibility = ["//visibility:public"],
 )

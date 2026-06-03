@@ -60,25 +60,49 @@ func UserContextMiddleware(adminService service.AdminService, clientID string) g
 					user, err := adminService.FindUserByOAuth(c.Request.Context(), "google", payload.Subject)
 					if err != nil {
 						if errors.Is(err, gorm.ErrRecordNotFound) {
-							// 3. Dynamic Single-Click Sign-up: auto-register new profiles seamlessly on first login
 							email, _ := payload.Claims["email"].(string)
 							name, _ := payload.Claims["name"].(string)
-							
-							log.Printf("[OAuth] Registering new first-time SSO user: %s (%s)", name, email)
-							newUser := &model.User{
-								OAuthProvider: "google",
-								OAuthID:       payload.Subject,
-								Email:         email,
-								Name:          name,
-								Metadata:      model.JSONB("{}"),
+
+							// Check if there is an existing pre-seeded user with this email
+							allUsers, listErr := adminService.ListUsers(c.Request.Context())
+							var existingUser *model.User
+							if listErr == nil {
+								for _, u := range allUsers {
+									if strings.EqualFold(u.Email, email) {
+										existingUser = u
+										break
+									}
+								}
 							}
-							
-							regErr := adminService.RegisterUser(c.Request.Context(), newUser)
-							if regErr == nil {
-								userID = newUser.ID
+
+							if existingUser != nil {
+								log.Printf("[OAuth] Binding existing seeded profile %s to Google Subject ID: %s", email, payload.Subject)
+								existingUser.OAuthID = payload.Subject
+								existingUser.OAuthProvider = "google"
+								if updateErr := adminService.UpdateUser(c.Request.Context(), existingUser); updateErr == nil {
+									userID = existingUser.ID
+								} else {
+									log.Printf("[OAuth] Warning: failed binding seeded user OAuthID: %v", updateErr)
+									userID = existingUser.ID
+								}
 							} else {
-								log.Printf("[OAuth] Warning: failed dynamically seeding user profile: %v", regErr)
-								userID = "00000000-0000-0000-0000-000000000000"
+								// 3. Dynamic Single-Click Sign-up: auto-register new profiles seamlessly on first login
+								log.Printf("[OAuth] Registering new first-time SSO user: %s (%s)", name, email)
+								newUser := &model.User{
+									OAuthProvider: "google",
+									OAuthID:       payload.Subject,
+									Email:         email,
+									Name:          name,
+									Metadata:      model.JSONB("{}"),
+								}
+								
+								regErr := adminService.RegisterUser(c.Request.Context(), newUser)
+								if regErr == nil {
+									userID = newUser.ID
+								} else {
+									log.Printf("[OAuth] Warning: failed dynamically seeding user profile: %v", regErr)
+									userID = "00000000-0000-0000-0000-000000000000"
+								}
 							}
 						} else {
 							log.Printf("[OAuth] Error: failed mapping GORM query validation: %v", err)

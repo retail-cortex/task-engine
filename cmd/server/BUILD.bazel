@@ -30,6 +30,7 @@ go_library(
 go_binary(
     name = "server",
     data = [
+        "//:.env.dev.toml",
         "//:.env.local.toml",
         "//:.env.toml",
     ],

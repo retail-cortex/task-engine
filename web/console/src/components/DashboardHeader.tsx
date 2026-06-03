@@ -30,6 +30,12 @@ interface DashboardHeaderProps {
   allSites: any[];
   activeSiteID: string;
   onSiteChange?: (siteID: string) => void;
+  // Coworker and Role filter properties:
+  activeCoworkers?: any[];
+  selectedAssigneeFilter?: string;
+  onAssigneeFilterChange?: (assigneeID: string) => void;
+  selectedRoleFilter?: string;
+  onRoleFilterChange?: (role: string) => void;
 }
 
 const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -46,7 +52,12 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   userSites,
   allSites,
   activeSiteID,
-  onSiteChange
+  onSiteChange,
+  activeCoworkers = [],
+  selectedAssigneeFilter = "ALL",
+  onAssigneeFilterChange,
+  selectedRoleFilter = "ALL",
+  onRoleFilterChange
 }: DashboardHeaderProps) => {
 
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
@@ -87,8 +98,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       <div className="brand-section">
         <div className="pulse-indicator"></div>
         <h1 className="brand-title">NEXUS INTEGRATION ENGINE HUB</h1>
-        
-        {sitesOptions.length > 1 && (userRole === 'ADMIN' || userRole === 'REGION_MANAGER' || userRole === 'SITE_MANAGER') ? (
+        {sitesOptions.length > 1 ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Store:</span>
             <select
@@ -119,6 +129,78 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           </div>
         ) : (
           <span className="site-meta-pill">Store: {activeSiteLabel}</span>
+        )}
+
+        {/* Dynamic Role-Based Filters in the Header */}
+        {(userRole === 'ADMIN' || userRole === 'REGION_MANAGER' || userRole === 'SITE_MANAGER') && activeCoworkers && activeCoworkers.length > 0 && (
+          <>
+            {/* Role Select Pill */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Role:</span>
+              <select
+                className="site-meta-pill"
+                style={{
+                  background: 'var(--input-bg)',
+                  border: '1px solid var(--panel-border)',
+                  color: 'var(--accent-primary)',
+                  padding: '2px 10px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '0.78rem',
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                  textTransform: 'uppercase',
+                  transition: 'all 0.2s ease-in-out'
+                }}
+                value={selectedRoleFilter}
+                onChange={(e) => onRoleFilterChange && onRoleFilterChange(e.target.value)}
+              >
+                <option value="ALL" style={{ background: '#0c0e1c', color: 'var(--text-primary)' }}>All Roles</option>
+                <option value="ADMIN" style={{ background: '#0c0e1c', color: 'var(--text-primary)' }}>Administrators</option>
+                <option value="SITE_MANAGER" style={{ background: '#0c0e1c', color: 'var(--text-primary)' }}>Managers</option>
+                <option value="SITE_ASSOCIATE" style={{ background: '#0c0e1c', color: 'var(--text-primary)' }}>Associates</option>
+              </select>
+            </div>
+
+            {/* Assignee Select Pill */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Assignee:</span>
+              <select
+                className="site-meta-pill"
+                style={{
+                  background: 'var(--input-bg)',
+                  border: '1px solid var(--panel-border)',
+                  color: 'var(--accent-primary)',
+                  padding: '2px 10px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '0.78rem',
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                  textTransform: 'uppercase',
+                  transition: 'all 0.2s ease-in-out'
+                }}
+                value={selectedAssigneeFilter}
+                onChange={(e) => onAssigneeFilterChange && onAssigneeFilterChange(e.target.value)}
+              >
+                <option value="ALL" style={{ background: '#0c0e1c', color: 'var(--text-primary)' }}>All Coworkers</option>
+                {(() => {
+                  const filtered = activeCoworkers.filter((u: any) => {
+                    if (selectedRoleFilter === "ALL") return true;
+                    const roleNames = u.Roles ? u.Roles.map((r: any) => r.Name || r.name) : [];
+                    return roleNames.includes(selectedRoleFilter);
+                  });
+                  return filtered.map((u: any) => (
+                    <option key={u.id || u.ID} value={u.id || u.ID} style={{ background: '#0c0e1c', color: 'var(--text-primary)' }}>
+                      {u.name || u.Name}
+                    </option>
+                  ));
+                })()}
+              </select>
+            </div>
+          </>
         )}
 
         <span className="site-meta-pill" style={{ textTransform: 'uppercase', background: 'var(--priority-high-glow)', color: 'var(--priority-high)', border: '1px solid var(--priority-high)', fontWeight: 700 }}>

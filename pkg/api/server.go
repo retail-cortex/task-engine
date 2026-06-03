@@ -156,6 +156,7 @@ func (s *Server) setupRoutes() {
 		// Task status updates & constraint overrides
 		orgs.PATCH("/sites/:siteId/tasks/:id/status", s.operationalHandler.UpdateTaskStatus)
 		orgs.POST("/sites/:siteId/tasks/:id/override", s.operationalHandler.OverrideAsset)
+		orgs.POST("/sites/:siteId/tasks/:id/claim", s.operationalHandler.ClaimTask)
 
 		// Scoped trades
 		orgs.POST("/sites/:siteId/trades", s.operationalHandler.ProposeTrade)

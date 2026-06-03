@@ -34,14 +34,14 @@ variable "domain" {
 
 variable "customer_id" {
   type        = string
-  description = "The Workspace corporate Customer ID. Setting value to 'my_customer' dynamically binds authenticating administrator credentials context."
-  default     = "my_customer"
+  description = "The Workspace corporate Customer ID."
+  default     = "C012qshn5"
 }
 
 variable "gcp_project_roles" {
   type        = list(string)
   description = "The standard least-privilege enterprise IAM roles assigned to the store-specific operations groups at project scope."
-  default     = [
+  default = [
     "roles/run.invoker"
   ]
 }
@@ -69,3 +69,12 @@ variable "regional_managers" {
   }))
   description = "Dynamic regional manager identity profile targets mapped across stores regional groups."
 }
+
+variable "store_memberships" {
+  type = map(object({
+    user_email = string
+    group_slug = string
+  }))
+  description = "Static and dynamic store role membership associations generated out-of-band by provisioning engine."
+}
+

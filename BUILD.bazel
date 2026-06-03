@@ -27,6 +27,7 @@ gazelle(name = "gazelle")
 licenses(["notice"])
 
 exports_files([
+    ".env.dev.toml",
     ".env.local.toml",
     ".env.toml",
     "LICENSE",

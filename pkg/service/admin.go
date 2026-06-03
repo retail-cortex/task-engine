@@ -24,6 +24,7 @@ import (
 // AdminService handles master data management (MDM) operations for organizational config.
 type AdminService interface {
 	RegisterUser(ctx context.Context, user *model.User) error
+	UpdateUser(ctx context.Context, user *model.User) error
 	AssignRole(ctx context.Context, userID, roleID string) error
 	RegisterOrganization(ctx context.Context, org *model.Organization) error
 	AssignUserToOrganization(ctx context.Context, orgID, userID string) error
@@ -62,6 +63,10 @@ func NewAdminService(
 
 func (s *adminService) RegisterUser(ctx context.Context, user *model.User) error {
 	return s.userRepo.Create(ctx, user)
+}
+
+func (s *adminService) UpdateUser(ctx context.Context, user *model.User) error {
+	return s.userRepo.Update(ctx, user)
 }
 
 func (s *adminService) AssignRole(ctx context.Context, userID, roleID string) error {

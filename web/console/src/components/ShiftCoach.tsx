@@ -125,7 +125,7 @@ const ShiftCoach: React.FC<ShiftCoachProps> = ({
                       <button
                         type="button"
                         className="a2ui-btn-action"
-                        onClick={() => handleVerifyVaultDrop(msg.a2uiData)}
+                        onClick={() => onA2UIActionTrigger('OVERRIDE', msg.a2uiData)}
                       >
                         Force Vault Compliance Verify & Override
                       </button>

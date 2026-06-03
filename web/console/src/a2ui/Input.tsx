@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import type { A2UIComponent } from './types';
 
 interface InputProps {
@@ -22,6 +22,13 @@ interface InputProps {
 }
 
 const Input: React.FC<InputProps> = ({ node, value = '', onChange }: InputProps) => {
+  // Auto-initialize the form state to default value on mount if not already present
+  useEffect(() => {
+    if (!value && node.value) {
+      onChange(node.value);
+    }
+  }, [node.value, value, onChange]);
+
   return (
     <div className="a2ui-form-group" style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
       {node.label && (
