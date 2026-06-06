@@ -42,7 +42,8 @@ variable "gcp_project_roles" {
   type        = list(string)
   description = "The standard least-privilege enterprise IAM roles assigned to the store-specific operations groups at project scope."
   default = [
-    "roles/run.invoker"
+    "roles/run.invoker",
+    "roles/iap.httpsResourceAccessor"
   ]
 }
 

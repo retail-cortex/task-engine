@@ -15,11 +15,13 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rmcguinness/gemini_task_engine/pkg/model"
 	"github.com/rmcguinness/gemini_task_engine/pkg/service"
+	"gorm.io/gorm"
 )
 
 type OperationalHandler struct {
@@ -27,6 +29,7 @@ type OperationalHandler struct {
 	shiftService      service.ShiftService
 	automationService service.AutomationService
 	cfg               Config
+	db                *gorm.DB
 }
 
 func NewOperationalHandler(
@@ -34,21 +37,54 @@ func NewOperationalHandler(
 	shiftService service.ShiftService,
 	automationService service.AutomationService,
 	cfg Config,
+	db *gorm.DB,
 ) *OperationalHandler {
 	return &OperationalHandler{
 		taskService:       taskService,
 		shiftService:      shiftService,
 		automationService: automationService,
 		cfg:               cfg,
+		db:                db,
 	}
 }
 
 func (h *OperationalHandler) Readiness(c *gin.Context) {
-	// Basic ping endpoint verifying connection readiness (mock/live check)
-	c.JSON(http.StatusOK, gin.H{
+	dbStatus := "connected"
+	statusCode := http.StatusOK
+
+	if h.db != nil {
+		sqlDB, err := h.db.DB()
+		if err != nil {
+			dbStatus = fmt.Sprintf("disconnected: %v", err)
+			statusCode = http.StatusServiceUnavailable
+		} else {
+			err = sqlDB.Ping()
+			if err != nil {
+				dbStatus = fmt.Sprintf("disconnected: %v", err)
+				statusCode = http.StatusServiceUnavailable
+			}
+		}
+	} else {
+		dbStatus = "disconnected: no database initialized"
+		statusCode = http.StatusServiceUnavailable
+	}
+
+	c.JSON(statusCode, gin.H{
 		"status":    "healthy",
-		"database":  "connected",
+		"database":  dbStatus,
 		"client_id": h.cfg.OAuth.ClientID,
+	})
+}
+
+func (h *OperationalHandler) Liveness(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"status": "healthy",
+	})
+}
+
+func (h *OperationalHandler) Startup(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"status": "healthy",
 	})
 }
 

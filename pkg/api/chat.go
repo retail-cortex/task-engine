@@ -122,7 +122,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		
 		var excessTask *model.TaskExecution
 		for _, t := range tasksList {
-			if t.TaskTemplateID == "Urgent Till Drawer Drop Request" && t.Status != "COMPLETED" {
+			if (t.TaskTemplateID == "d000fa44-0000-0000-0000-000000000001" || t.TaskTemplateID == "Urgent Till Drawer Drop Request" || t.Task.Name == "Urgent Till Drawer Cash Drop Request") && t.Status != "COMPLETED" {
 				excessTask = t
 				break
 			}
@@ -1081,6 +1081,119 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 			}
 		} else {
 			replyContent = "No matching SOP documentation chunks resolved under vector searches index tables."
+		}
+	} else if strings.Contains(lower, "map") || strings.Contains(lower, "blueprint") || strings.Contains(lower, "layout") || strings.Contains(lower, "location") {
+		layout := "linear"
+		if siteID == "44444444-4444-4444-4444-444444440001" {
+			layout = "boutique"
+		} else if siteID == "44444444-4444-4444-4444-444444440002" {
+			layout = "racetrack"
+		}
+
+		var beacon map[string]interface{}
+		if strings.Contains(lower, "vault") || strings.Contains(lower, "safe") {
+			if layout == "boutique" {
+				beacon = map[string]interface{}{"x": 175, "y": 25, "name": "Secure Back-Office Cash Vault"}
+			} else if layout == "racetrack" {
+				beacon = map[string]interface{}{"x": 30, "y": 125, "name": "Sub-Level Cash Room"}
+			} else {
+				beacon = map[string]interface{}{"x": 184, "y": 125, "name": "Main Store Cash Vault Room"}
+			}
+		} else if strings.Contains(lower, "register") || strings.Contains(lower, "till") || strings.Contains(lower, "checkout") {
+			if layout == "boutique" {
+				beacon = map[string]interface{}{"x": 105, "y": 125, "name": "Boutique Front Checkout Counter"}
+			} else if layout == "racetrack" {
+				beacon = map[string]interface{}{"x": 150, "y": 125, "name": "South Register Gallery"}
+			} else {
+				beacon = map[string]interface{}{"x": 162, "y": 65, "name": "Registers Lane 4 Checkouts Corridor"}
+			}
+		} else if strings.Contains(lower, "greens") || strings.Contains(lower, "produce") || strings.Contains(lower, "wall") || strings.Contains(lower, "wet") {
+			if layout == "boutique" {
+				beacon = map[string]interface{}{"x": 45, "y": 25, "name": "Organic Micro-Greens Cool Wall"}
+			} else if layout == "racetrack" {
+				beacon = map[string]interface{}{"x": 30, "y": 25, "name": "Flagship Fresh Food Chilled Canopy"}
+			} else {
+				beacon = map[string]interface{}{"x": 73, "y": 10, "name": "Produce Perimeter Wet Wall Cabinets"}
+			}
+		} else if strings.Contains(lower, "showcase") || strings.Contains(lower, "atrium") || strings.Contains(lower, "experience") || strings.Contains(lower, "display") {
+			if layout == "boutique" {
+				beacon = map[string]interface{}{"x": 100, "y": 75, "name": "Central Interactive Appliance Ring"}
+			} else if layout == "racetrack" {
+				beacon = map[string]interface{}{"x": 100, "y": 75, "name": "Atrium Smart-Home Experience Center"}
+			} else {
+				beacon = map[string]interface{}{"x": 111, "y": 44, "name": "Aisle 10 Showroom Display"}
+			}
+		} else if strings.Contains(lower, "dock") || strings.Contains(lower, "loading") || strings.Contains(lower, "receiving") || strings.Contains(lower, "stock") || strings.Contains(lower, "cage") {
+			if layout == "boutique" {
+				beacon = map[string]interface{}{"x": 15, "y": 25, "name": "SF Rear Loading Bay"}
+			} else if layout == "racetrack" {
+				beacon = map[string]interface{}{"x": 175, "y": 25, "name": "North Cargo Intake Bay"}
+			} else {
+				beacon = map[string]interface{}{"x": 15, "y": 20, "name": "Receiving Dock A Cargo Bay"}
+			}
+		}
+
+		layoutName := "Linear"
+		if layout == "boutique" {
+			layoutName = "Boutique"
+		} else if layout == "racetrack" {
+			layoutName = "Racetrack"
+		}
+
+		beaconName := "System Center"
+		coords := "x: 0, y: 0"
+		if beacon != nil {
+			beaconName = beacon["name"].(string)
+			coords = fmt.Sprintf("x: %v, y: %v", beacon["x"], beacon["y"])
+		}
+
+		canvasChild := map[string]interface{}{
+			"type":   "canvas",
+			"layout": layout,
+		}
+		if beacon != nil {
+			canvasChild["beacon"] = beacon
+		}
+
+		replyContent = "Here is the interactive store layout blueprint map, showing highlighted focal locations grounded from your store context database:"
+		a2uiType = "STORE_LAYOUT"
+
+		a2uiData = map[string]interface{}{
+			"type":  "card",
+			"title": "STORE SPATIAL BLUEPRINT MAP",
+			"style": "primary",
+			"children": []interface{}{
+				map[string]interface{}{
+					"type":    "text",
+					"content": "Active store layout context showing highlighted focal target beacon:",
+					"style":   "secondary",
+				},
+				canvasChild,
+				map[string]interface{}{
+					"type": "table",
+					"rows": []interface{}{
+						map[string]interface{}{"label": "Store Layout Style", "value": layoutName},
+						map[string]interface{}{"label": "Focal Highlight Beacon", "value": beaconName},
+						map[string]interface{}{"label": "Target Grid Coordinates", "value": coords},
+					},
+				},
+				map[string]interface{}{
+					"type":  "row",
+					"align": "end",
+					"children": []interface{}{
+						map[string]interface{}{
+							"type":   "button",
+							"label":  "Grounded Location Acknowledged",
+							"style":  "primary",
+							"action": "LOCATION_ACKNOWLEDGE",
+							"actionData": map[string]interface{}{
+								"layout": layout,
+								"target": beaconName,
+							},
+						},
+					},
+				},
+			},
 		}
 	} else {
 		// Grounded General Knowledge Search Fallback (resolves arbitrary questions dynamically!)

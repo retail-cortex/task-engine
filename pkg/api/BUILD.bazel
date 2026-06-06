@@ -25,12 +25,17 @@ go_library(
         "server.go",
     ],
     importpath = "github.com/rmcguinness/gemini_task_engine/pkg/api",
+    embedsrcs = [
+        "openapi.json",
+        "swagger.html",
+    ],
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/agents",
         "//pkg/model",
         "//pkg/service",
         "@com_github_gin_gonic_gin//:gin",
+        "@com_github_google_uuid//:uuid",
         "@com_github_metoro_io_mcp_golang//:mcp-golang",
         "@com_github_metoro_io_mcp_golang//transport/http",
         "@io_gorm_gorm//:gorm",

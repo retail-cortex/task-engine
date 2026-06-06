@@ -1,0 +1,1242 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Gemini Task Engine API",
+    "description": "API documentation for the Gemini Task Engine backend. Provides administrative, operational, RAG, and MCP interfaces for retail store automation.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Local/Default server"
+    }
+  ],
+  "paths": {
+    "/health/readiness": {
+      "get": {
+        "summary": "Check API readiness",
+        "description": "Verifies that the server and database connections are healthy and operating normally.",
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "healthy" },
+                    "database": { "type": "string", "example": "connected" },
+                    "client_id": { "type": "string", "example": "12345-oauth" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/liveness": {
+      "get": {
+        "summary": "Check API liveness",
+        "description": "Simple ping verifying that the application process is running and responding.",
+        "responses": {
+          "200": {
+            "description": "API is alive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "healthy" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/startup": {
+      "get": {
+        "summary": "Check API startup status",
+        "description": "Verifies that the application initialization sequence is fully complete.",
+        "responses": {
+          "200": {
+            "description": "API has started up successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "healthy" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mcp": {
+      "post": {
+        "tags": ["Agentic"],
+        "summary": "Global static MCP endpoint",
+        "description": "Standard Model Context Protocol (MCP) endpoint supporting tool listing, prompt listing, and tool calls with context passed via headers.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          {
+            "name": "X-Shift-ID",
+            "in": "header",
+            "required": false,
+            "description": "Optional active Shift UUID",
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stateless MCP JSON-RPC response"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "List all users",
+        "description": "Retrieves a list of all user accounts and their associated roles and physical sites.",
+        "security": [{ "OAuth2": [] }],
+        "responses": {
+          "200": {
+            "description": "List of users successfully retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/User" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/admin/roles": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Create a new role",
+        "description": "Registers a new user role in the system.",
+        "security": [{ "OAuth2": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Shift Supervisor" },
+                  "description": { "type": "string", "example": "Manages shift handovers and task overrides." }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Role successfully created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Role" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/admin/users/{id}/roles": {
+      "put": {
+        "tags": ["Admin"],
+        "summary": "Assign a role to a user",
+        "description": "Links a user to a specific system role.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The UUID of the user",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["role_id"],
+                "properties": {
+                  "role_id": { "type": "string", "format": "uuid", "example": "a000fa44-0000-0000-0000-000000000001" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Role successfully assigned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/admin/organizations": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Create a new organization",
+        "description": "Registers a new tenant organization in the task engine hierarchy.",
+        "security": [{ "OAuth2": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Retail Corp" },
+                  "parent_id": { "type": "string", "format": "uuid", "nullable": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Organization created successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Organization" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      },
+      "get": {
+        "tags": ["Admin"],
+        "summary": "List all organizations",
+        "description": "Retrieves all registered organizations.",
+        "security": [{ "OAuth2": [] }],
+        "responses": {
+          "200": {
+            "description": "List of organizations successfully retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Organization" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/admin/organizations/{orgId}/users/{userId}": {
+      "put": {
+        "tags": ["Admin"],
+        "summary": "Assign a user to an organization",
+        "description": "Associates a user account with a corporate organization.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "description": "The UUID of the organization",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "description": "The UUID of the user",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User successfully assigned to organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/admin/organizations/{orgId}/sites": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Create a new physical site",
+        "description": "Registers a new store or warehouse physical site context under an organization.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "description": "The UUID of the organization",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Dallas Store #104" },
+                  "site_type": { "type": "string", "enum": ["STORE", "WAREHOUSE"], "default": "STORE" },
+                  "address": { "type": "string", "example": "123 Main St, Dallas, TX" },
+                  "latitude": { "type": "number", "example": 32.7767 },
+                  "longitude": { "type": "number", "example": -96.7970 },
+                  "icao_code": { "type": "string", "example": "KDFW" },
+                  "time_zone": { "type": "string", "example": "America/Chicago" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Site successfully created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Site" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/admin/organizations/{orgId}/sites/{siteId}/locations": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Create a sub-location within a site",
+        "description": "Registers a non-movable sub-location (register, aisle, shelf) inside a physical storefront site.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "siteId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Checkout Register 4" },
+                  "location_type": { "type": "string", "example": "REGISTER" },
+                  "location_function_type": { "type": "string", "example": "DISPLAY" },
+                  "x": { "type": "number", "example": 12.5 },
+                  "y": { "type": "number", "example": 4.2 },
+                  "z": { "type": "number", "example": 1.0 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Location successfully created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Location" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/admin/organizations/{orgId}/sites/{siteId}/locations/{locationId}/assets": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Create an asset at a location",
+        "description": "Registers physical machinery, equipment, or drawer limits assets inside a sub-location context.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "siteId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "locationId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "asset_tag"],
+                "properties": {
+                  "name": { "type": "string", "example": "Cash Ceiling Register 4" },
+                  "asset_tag": { "type": "string", "example": "CASH-CEILING-DRAWER-4" },
+                  "status": { "type": "string", "example": "AVAILABLE" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Asset successfully created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Asset" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/admin/tasks/templates": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Create a new task template",
+        "description": "Registers a new master task template definition mapping priorities, estimations, and requirements.",
+        "security": [{ "OAuth2": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Urgent Till Drawer Drop Request" },
+                  "description": { "type": "string", "example": "Transfer cash to backroom safe when threshold alarms fire." },
+                  "task_type": { "type": "string", "example": "ADHOC" },
+                  "priority": { "type": "integer", "example": 1 },
+                  "estimated_duration_minutes": { "type": "integer", "example": 15 },
+                  "target_role_id": { "type": "string", "format": "uuid", "nullable": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Task template successfully created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Task" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/admin/scheduler/trigger": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Force trigger scheduler sweep",
+        "description": "Manually triggers an immediate sweeps cycle over active sites task templates, generating required executions.",
+        "security": [{ "OAuth2": [] }],
+        "responses": {
+          "200": {
+            "description": "Scheduler sweep triggered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" },
+                    "message": { "type": "string", "example": "Scheduled batch sweeps materialized successfully." }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/v1/admin/scheduler/status": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Get scheduler status",
+        "description": "Retrieves statistics and daemon statuses of the background job execution engine.",
+        "security": [{ "OAuth2": [] }],
+        "responses": {
+          "200": {
+            "description": "Status successfully retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "running": { "type": "boolean", "example": true },
+                    "last_sweep": { "type": "string", "format": "date-time" },
+                    "sweeps_count": { "type": "integer", "example": 42 }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/v1/organizations/{orgId}/me": {
+      "get": {
+        "tags": ["Operational"],
+        "summary": "Get active user profile",
+        "description": "Resolves user profile details, roles, and storefront assignments associated with the authenticated context.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile successfully resolved",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/User" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{orgId}/sites": {
+      "get": {
+        "tags": ["Operational"],
+        "summary": "List active sites",
+        "description": "Retrieves physical storefront sites active under the organization scope.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of active sites",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Site" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{orgId}/tasks": {
+      "get": {
+        "tags": ["Operational"],
+        "summary": "Get organization task executions",
+        "description": "Retrieves the master list of all task executions registered under the organization.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task executions list successfully retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/TaskExecution" }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{orgId}/sites/{siteId}/tasks": {
+      "get": {
+        "tags": ["Operational"],
+        "summary": "Get site task queue",
+        "description": "Retrieves active task executions prioritized specifically for a physical storefront site.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "siteId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Queue resolved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/TaskExecution" }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{orgId}/sites/{siteId}/users/{userId}/tasks": {
+      "get": {
+        "tags": ["Operational"],
+        "summary": "Get user-specific site task queue",
+        "description": "Retrieves task executions assigned to, or claimable by, a specific user at a site.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "siteId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "userId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Queue resolved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/TaskExecution" }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{orgId}/sites/{siteId}/tasks/{id}/status": {
+      "patch": {
+        "tags": ["Operational"],
+        "summary": "Update task execution status",
+        "description": "Updates status tags and checklist states of an active task execution.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "siteId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "id", "in": "path", "required": true, "description": "The UUID of the task execution", "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["status"],
+                "properties": {
+                  "status": { "type": "string", "enum": ["PENDING", "IN_PROGRESS", "COMPLETED", "FAILED"], "example": "COMPLETED" },
+                  "checklist_state": { "type": "string", "example": "{\"items\":[{\"id\":\"step1\",\"completed\":true}]}" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status successfully updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{orgId}/sites/{siteId}/tasks/{id}/override": {
+      "post": {
+        "tags": ["Operational"],
+        "summary": "Override an asset constraint on a task",
+        "description": "Applies an administrative bypass to an asset constraint blocking task execution, requiring a compliance justification.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "siteId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "id", "in": "path", "required": true, "description": "The UUID of the task execution", "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["asset_id", "justification"],
+                "properties": {
+                  "asset_id": { "type": "string", "format": "uuid", "example": "b000fa44-0000-0000-0000-000000000001" },
+                  "justification": { "type": "string", "example": "Verified cash drop pouches secured inside main backend vault manually." }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Override applied successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{orgId}/sites/{siteId}/tasks/{id}/claim": {
+      "post": {
+        "tags": ["Operational"],
+        "summary": "Claim an active task execution",
+        "description": "Assigns the authenticated user to a pending task execution if they meet the required role constraints.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "siteId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task execution successfully claimed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{orgId}/sites/{siteId}/trades": {
+      "post": {
+        "tags": ["Operational"],
+        "summary": "Propose a task trade",
+        "description": "Initiates a shift trade proposal transferring task execution ownership to another colleague.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "siteId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["task_execution_id", "proposed_assignee_id"],
+                "properties": {
+                  "task_execution_id": { "type": "string", "format": "uuid", "example": "e000fa44-0000-0000-0000-000000000001" },
+                  "proposed_assignee_id": { "type": "string", "format": "uuid", "example": "00000000-0000-0000-0000-000000000002" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Trade proposed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      },
+      "get": {
+        "tags": ["Operational"],
+        "summary": "List pending trades for active user",
+        "description": "Retrieves the list of shift trades that are pending response or review by the active user.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "siteId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of pending trades",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/TaskTrade" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{orgId}/sites/{siteId}/trades/{tradeId}/accept": {
+      "post": {
+        "tags": ["Operational"],
+        "summary": "Accept a pending trade request",
+        "description": "Accepts a pending peer-to-peer task trade swap and shifts the task assignee field.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "siteId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "tradeId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trade successfully accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{orgId}/sites/{siteId}/trades/{tradeId}/reject": {
+      "post": {
+        "tags": ["Operational"],
+        "summary": "Reject a pending trade request",
+        "description": "Rejects a pending peer-to-peer task trade, keeping the task in the original user's queue.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "siteId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "tradeId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trade successfully rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "success" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{orgId}/sites/{siteId}/alerts": {
+      "post": {
+        "tags": ["Operational"],
+        "summary": "Trigger a streaming sensor event",
+        "description": "Ingests a streaming alarm or sensor alert event, generating required task executions for checkout ceilings or empty shelves.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "siteId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["organizer_id", "event_type", "description"],
+                "properties": {
+                  "organizer_id": { "type": "string", "example": "CASH-CEILING-DRAWER-4" },
+                  "event_type": { "type": "string", "example": "TillDrawerDropEvent" },
+                  "description": { "type": "string", "example": "Register 4 limits exceeded maximum capacity." }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Event successfully ingested and task created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TaskExecution" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{orgId}/sites/{siteId}/users/{userId}/sessions/shift/{shiftId}/chat": {
+      "post": {
+        "tags": ["Agentic"],
+        "summary": "MCP endpoint stream session",
+        "description": "Connects or passes standard MCP messages through stateless HTTP transport.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "siteId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "userId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "shiftId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stateless MCP response return payload"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{orgId}/sites/{siteId}/users/{userId}/sessions/shift/{shiftId}/message": {
+      "post": {
+        "tags": ["Agentic"],
+        "summary": "Conversational orchestrator message chat",
+        "description": "Interface for conversational AI agent interactions, executing RAG and emitting A2UI layout cards.",
+        "security": [{ "OAuth2": [] }],
+        "parameters": [
+          { "name": "orgId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "siteId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "userId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "shiftId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["message"],
+                "properties": {
+                  "message": { "type": "string", "example": "What trades are waiting for my action?" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A2UI chat payload return success",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MessageResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/ServerError" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "OAuth2": {
+        "type": "oauth2",
+        "flows": {
+          "implicit": {
+            "authorizationUrl": "/oauth/authorize",
+            "scopes": {}
+          }
+        }
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string" },
+          "name": { "type": "string" },
+          "oauth_provider": { "type": "string" },
+          "oauth_id": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "roles": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Role" }
+          },
+          "sites": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Site" }
+          }
+        }
+      },
+      "Role": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Organization": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "parent_id": { "type": "string", "format": "uuid", "nullable": true },
+          "name": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Site": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "organization_id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "site_type": { "type": "string" },
+          "address": { "type": "string" },
+          "latitude": { "type": "number" },
+          "longitude": { "type": "number" },
+          "icao_code": { "type": "string" },
+          "time_zone": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Location": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "site_id": { "type": "string", "format": "uuid" },
+          "parent_id": { "type": "string", "format": "uuid", "nullable": true },
+          "name": { "type": "string" },
+          "location_type": { "type": "string" },
+          "location_function_type": { "type": "string" },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "z": { "type": "number" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Asset": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "location_id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "asset_tag": { "type": "string" },
+          "status": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Task": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "parent_task_id": { "type": "string", "format": "uuid", "nullable": true },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "task_type": { "type": "string" },
+          "target_role_id": { "type": "string", "format": "uuid", "nullable": true },
+          "priority": { "type": "integer" },
+          "estimated_duration_minutes": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "TaskExecution": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "task_template_id": { "type": "string", "format": "uuid" },
+          "parent_execution_id": { "type": "string", "format": "uuid", "nullable": true },
+          "execution_type": { "type": "string" },
+          "assignee_id": { "type": "string", "format": "uuid", "nullable": true },
+          "description": { "type": "string" },
+          "status": { "type": "string" },
+          "priority": { "type": "integer" },
+          "due_at": { "type": "string", "format": "date-time", "nullable": true },
+          "completed_at": { "type": "string", "format": "date-time", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "TaskTrade": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "task_execution_id": { "type": "string", "format": "uuid" },
+          "initiator_id": { "type": "string", "format": "uuid" },
+          "proposed_assignee_id": { "type": "string", "format": "uuid" },
+          "status": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "role": { "type": "string" },
+          "content": { "type": "string" },
+          "a2uiType": { "type": "string" },
+          "a2uiData": { "type": "object" }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Invalid parameter inputs or bad payload structure",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Missing, expired, or invalid OAuth context credentials",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Internal server database error or runtime panic fallback",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

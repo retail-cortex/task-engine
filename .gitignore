@@ -33,6 +33,7 @@ build/
 .env.*.toml
 
 scratch
+.bazel-deploy-cache/
 
 # Terraform local credentials and state registries
 *passwords_registry.csv

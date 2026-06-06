@@ -13,3 +13,4 @@ Choose from the following manual sections mapping the private business tier layo
 * **[Event Ingestion System Specifications](events.md)**
 * **[Scheduler Heartbeats & Recovery Sweep Engine](scheduler.md)**
 * **[Workspace Directory & Store Mapping Reference](store_information.md)**
+* **[A2UI Development & Integration Lessons](a2ui_lessons.md)**

@@ -30,12 +30,16 @@ interface DashboardHeaderProps {
   allSites: any[];
   activeSiteID: string;
   onSiteChange?: (siteID: string) => void;
+  allOrganizations?: any[];
+  activeOrgID?: string;
+  onOrgChange?: (orgID: string) => void;
   // Coworker and Role filter properties:
   activeCoworkers?: any[];
   selectedAssigneeFilter?: string;
   onAssigneeFilterChange?: (assigneeID: string) => void;
   selectedRoleFilter?: string;
   onRoleFilterChange?: (role: string) => void;
+  onNavigateToAdmin?: () => void;
 }
 
 const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -53,11 +57,15 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   allSites,
   activeSiteID,
   onSiteChange,
+  allOrganizations = [],
+  activeOrgID = 'ALL',
+  onOrgChange,
   activeCoworkers = [],
   selectedAssigneeFilter = "ALL",
   onAssigneeFilterChange,
   selectedRoleFilter = "ALL",
-  onRoleFilterChange
+  onRoleFilterChange,
+  onNavigateToAdmin
 }: DashboardHeaderProps) => {
 
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
@@ -82,7 +90,13 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   };
 
   const getSiteOptions = () => {
-    const list = (userRole === 'ADMIN' || userRole === 'REGION_MANAGER') ? allSites : userSites;
+    let list = (userRole === 'ADMIN' || userRole === 'REGION_MANAGER') ? allSites : userSites;
+    
+    // Filter sites by selected active organization context!
+    if (activeOrgID && activeOrgID !== 'ALL') {
+      list = list.filter((s: any) => (s.OrganizationID || s.organization_id) === activeOrgID);
+    }
+
     if (list.length === 0) {
       return [{ id: activeSiteID, name: activeSiteID === '55555555-5555-5555-5555-555555550000' ? 'OmniMart Dallas Store #1000' : 'Volt & Vine Seattle' }];
     }
@@ -98,10 +112,45 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       <div className="brand-section">
         <div className="pulse-indicator"></div>
         <h1 className="brand-title">NEXUS INTEGRATION ENGINE HUB</h1>
+        {/* Organization Selector (Admin/Region Manager Only) */}
+        {(userRole === 'ADMIN' || userRole === 'REGION_MANAGER') && allOrganizations.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Brand/Org:</span>
+            <select
+              id="brand-org-selector"
+              className="site-meta-pill"
+              style={{
+                background: 'var(--input-bg)',
+                border: '1px solid var(--panel-border)',
+                color: 'var(--accent-primary)',
+                padding: '2px 10px',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontWeight: 700,
+                fontSize: '0.78rem',
+                fontFamily: 'inherit',
+                outline: 'none',
+                textTransform: 'uppercase',
+                transition: 'all 0.2s ease-in-out'
+              }}
+              value={activeOrgID}
+              onChange={(e) => onOrgChange && onOrgChange(e.target.value)}
+            >
+              <option value="ALL" style={{ background: '#0c0e1c', color: 'var(--text-primary)' }}>All Brands</option>
+              {allOrganizations.map((o: any) => (
+                <option key={o.id || o.ID} value={o.id || o.ID} style={{ background: '#0c0e1c', color: 'var(--text-primary)' }}>
+                  {o.name || o.Name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {sitesOptions.length > 1 ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Store:</span>
             <select
+              id="store-selector"
               className="site-meta-pill"
               style={{
                 background: 'var(--input-bg)',
@@ -215,7 +264,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
       </div>
       <div className="header-user-card">
         <div className="profile-container" ref={dropdownRef}>
-          <div className="avatar-wrapper" onClick={() => setIsDropdownOpen(prev => !prev)} title="Account Settings">
+          <div id="profile-avatar-button" className="avatar-wrapper" onClick={() => setIsDropdownOpen(prev => !prev)} title="Account Settings">
             {userPicture ? (
               <img src={userPicture} alt={userName} className="user-avatar-img" />
             ) : (
@@ -280,6 +329,28 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                   </span>
                 )}
               </div>
+
+              {userRole === 'ADMIN' && onNavigateToAdmin && (
+                <button
+                  id="admin-control-button"
+                  type="button"
+                  className="dropdown-menu-item"
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    onNavigateToAdmin();
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="dropdown-menu-icon" style={{ color: 'var(--accent-primary)' }}>
+                      <rect x="3" y="3" width="7" height="9" />
+                      <rect x="14" y="3" width="7" height="5" />
+                      <rect x="14" y="12" width="7" height="9" />
+                      <rect x="3" y="16" width="7" height="5" />
+                    </svg>
+                    <span>Admin Control</span>
+                  </div>
+                </button>
+              )}
 
               <div className="dropdown-divider"></div>
 

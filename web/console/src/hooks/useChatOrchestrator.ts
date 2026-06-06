@@ -203,7 +203,7 @@ export const useChatOrchestrator = ({
           const notifyMsg: ChatMessage = {
             id: 'agent-action-' + Date.now(),
             role: 'assistant',
-            content: `Live sensor alarm alert ingested! Created persistent GORM task ticket: ${createdTask.task_template_id} (ID: ${createdTask.id.substring(0, 8)}). Register Terminal 4 target focal beacon activated. Complete cash drop checklist.`
+            content: `Live sensor alarm alert ingested! Created persistent GORM task ticket: ${createdTask.TaskTemplateID || createdTask.task_template_id} (ID: ${(createdTask.ID || createdTask.id || '').substring(0, 8)}). Register Terminal 4 target focal beacon activated. Complete cash drop checklist.`
           };
           setChatLog((prev) => [...prev, notifyMsg]);
           syncTasksList();
@@ -244,7 +244,7 @@ export const useChatOrchestrator = ({
           const notifyMsg: ChatMessage = {
             id: 'agent-action-' + Date.now(),
             role: 'assistant',
-            content: `GORM SOP Compliance task ticket generated! Created task: ${createdTask.id.substring(0, 8)}. Focus target beacon on Aisle 7 operations coordinates twin activated. Complete the active audit steps.`
+            content: `GORM SOP Compliance task ticket generated! Created task: ${(createdTask.ID || createdTask.id || '').substring(0, 8)}. Focus target beacon on Aisle 7 operations coordinates twin activated. Complete the active audit steps.`
           };
           setChatLog((prev) => [...prev, notifyMsg]);
           syncTasksList();

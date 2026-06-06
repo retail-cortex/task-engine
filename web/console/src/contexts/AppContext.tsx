@@ -42,6 +42,10 @@ export interface AppContextType {
   setActiveSiteID: (siteId: string) => void;
   allSites: any[];
   setAllSites: (sites: any[]) => void;
+  allOrganizations: any[];
+  setAllOrganizations: (orgs: any[]) => void;
+  activeOrgID: string;
+  setActiveOrgID: (orgId: string) => void;
   allUsers: any[];
   setAllUsers: (users: any[]) => void;
   activeUserId: string;
@@ -97,6 +101,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     () => localStorage.getItem('active_site_id') || SITE_ID
   );
   const [allSites, setAllSites] = useState<any[]>([]);
+  const [allOrganizations, setAllOrganizations] = useState<any[]>([]);
+  const [activeOrgID, setActiveOrgID] = useState<string>(
+    () => localStorage.getItem('active_org_id') || 'ALL'
+  );
+
+  useEffect(() => {
+    localStorage.setItem('active_org_id', activeOrgID);
+  }, [activeOrgID]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [activeUserId, setActiveUserId] = useState<string>(BYPASS_USER_ID);
 
@@ -160,6 +172,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUserSites([]);
     setAllSites([]);
     setAllUsers([]);
+    setAllOrganizations([]);
+    setActiveOrgID('ALL');
+    localStorage.removeItem('active_org_id');
     setActiveUserId(BYPASS_USER_ID);
   };
 
@@ -205,6 +220,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (activeRole === "ADMIN" || activeRole === "REGION_MANAGER") {
           ApiClient.fetchSites()
             .then(data => setAllSites(data))
+            .catch(console.error);
+
+          ApiClient.fetchOrganizations()
+            .then(data => setAllOrganizations(data || []))
             .catch(console.error);
         }
 
@@ -273,6 +292,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setActiveSiteID,
       allSites,
       setAllSites,
+      allOrganizations,
+      setAllOrganizations,
+      activeOrgID,
+      setActiveOrgID,
       allUsers,
       setAllUsers,
       activeUserId,

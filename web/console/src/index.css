@@ -1205,3 +1205,167 @@ input:checked + .switch-slider:before {
   box-shadow: 0 0 12px var(--accent-primary) !important;
   border-color: var(--accent-primary) !important;
 }
+
+/* --- MDM ADMINISTRATIVE PANELS LAYOUTS --- */
+.admin-container {
+  display: flex;
+  flex: 1;
+  gap: 16px;
+  min-height: 0;
+  overflow: hidden;
+  height: 100%;
+}
+
+.admin-sidebar {
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px;
+  flex-shrink: 0;
+}
+
+.admin-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  text-align: left;
+}
+
+.admin-nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.admin-nav-item.active {
+  background: rgba(99, 102, 241, 0.1) !important;
+  border-left: 4px solid var(--accent-primary) !important;
+  color: var(--accent-primary) !important;
+  font-weight: 600;
+}
+
+.admin-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.admin-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* Custom form container grid for admin forms */
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  padding: 24px;
+}
+
+.admin-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* --- LIGHTWEIGHT FLEX/LAYOUT UTILITY CLASSES (Restores Tailwind compatibility) --- */
+.flex {
+  display: flex !important;
+}
+.flex-col {
+  flex-direction: column !important;
+}
+.flex-row {
+  flex-direction: row !important;
+}
+.flex-wrap {
+  flex-wrap: wrap !important;
+}
+.flex-1 {
+  flex: 1 1 0% !important;
+}
+.flex-shrink-0 {
+  flex-shrink: 0 !important;
+}
+.gap-1 {
+  gap: 4px !important;
+}
+.gap-2 {
+  gap: 8px !important;
+}
+.gap-3 {
+  gap: 12px !important;
+}
+.gap-4 {
+  gap: 16px !important;
+}
+.gap-6 {
+  gap: 24px !important;
+}
+.justify-between {
+  justify-content: space-between !important;
+}
+.justify-end {
+  justify-content: flex-end !important;
+}
+.justify-center {
+  justify-content: center !important;
+}
+.items-center {
+  align-items: center !important;
+}
+.relative {
+  position: relative !important;
+}
+.w-full {
+  width: 100% !important;
+}
+.h-full {
+  height: 100% !important;
+}
+.h-32 {
+  height: 128px !important;
+}
+.min-h-0 {
+  min-height: 0 !important;
+}
+.overflow-hidden {
+  overflow: hidden !important;
+}
+.text-sm {
+  font-size: 14px !important;
+}
+.text-xs {
+  font-size: 12px !important;
+}
+.font-semibold {
+  font-weight: 600 !important;
+}
+.font-bold {
+  font-weight: 700 !important;
+}
+.text-muted {
+  color: var(--text-muted) !important;
+}
+.transition-colors {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease !important;
+}

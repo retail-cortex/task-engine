@@ -19,12 +19,14 @@ import TaskQueue from './components/TaskQueue';
 import OperationsCenter from './components/OperationsCenter';
 import ShiftCoach from './components/ShiftCoach';
 import OfflineOverlay from './components/OfflineOverlay';
+import AdminPanel from './components/AdminPanel';
 import { useAppContext } from './contexts/AppContext';
 import { useTaskManagement } from './hooks/useTaskManagement';
 import { useChatOrchestrator } from './hooks/useChatOrchestrator';
 import { ApiClient } from './api/client';
 
 const App: React.FC = () => {
+  const [currentPage, setCurrentPage] = React.useState<string>('dashboard');
   const {
     theme,
     setTheme,
@@ -49,6 +51,9 @@ const App: React.FC = () => {
     handleSignOut,
     syncSchedulerDiagnostics,
     handleSiteChange,
+    allOrganizations,
+    activeOrgID,
+    setActiveOrgID,
   } = useAppContext();
 
   const {
@@ -74,6 +79,21 @@ const App: React.FC = () => {
 
   const onSiteChangeWrapper = (siteId: string) => {
     handleSiteChange(siteId);
+    setSelectedAssigneeFilter("ALL");
+  };
+
+  const onOrgChangeWrapper = (orgId: string) => {
+    setActiveOrgID(orgId);
+    if (orgId === 'ALL') {
+      if (allSites.length > 0) {
+        handleSiteChange(allSites[0].id || allSites[0].ID);
+      }
+    } else {
+      const orgSites = allSites.filter(s => (s.OrganizationID || s.organization_id) === orgId);
+      if (orgSites.length > 0) {
+        handleSiteChange(orgSites[0].id || orgSites[0].ID);
+      }
+    }
     setSelectedAssigneeFilter("ALL");
   };
 
@@ -145,46 +165,54 @@ const App: React.FC = () => {
         allSites={allSites}
         activeSiteID={activeSiteID}
         onSiteChange={onSiteChangeWrapper}
+        allOrganizations={allOrganizations}
+        activeOrgID={activeOrgID}
+        onOrgChange={onOrgChangeWrapper}
         activeCoworkers={allUsers.filter(u => u.Sites && u.Sites.some((s: any) => (s.id || s.ID) === activeSiteID))}
         selectedAssigneeFilter={selectedAssigneeFilter}
         onAssigneeFilterChange={(assigneeId) => setSelectedAssigneeFilter(assigneeId)}
         selectedRoleFilter={selectedRoleFilter}
         onRoleFilterChange={(role) => setSelectedRoleFilter(role)}
+        onNavigateToAdmin={() => setCurrentPage('admin')}
       />
 
-      <main className="dashboard-grid">
-        {/* 2. Left operational task queues column */}
-        <TaskQueue
-          tasks={getFilteredTasks()}
-          selectedTask={selectedTask}
-          onSelectTask={handleSelectTask}
-          onTradeTask={(task) => submitChatMsg(`Propose task trade for task ${task.id}`)}
-          onTakeTask={handleTakeTask}
-        />
+      {currentPage === 'admin' ? (
+        <AdminPanel onExit={() => setCurrentPage('dashboard')} />
+      ) : (
+        <main className="dashboard-grid">
+          {/* 2. Left operational task queues column */}
+          <TaskQueue
+            tasks={getFilteredTasks()}
+            selectedTask={selectedTask}
+            onSelectTask={handleSelectTask}
+            onTradeTask={(task) => submitChatMsg(`Propose task trade for task ${task.id}`)}
+            onTakeTask={handleTakeTask}
+          />
 
-        {/* 3. Center Operations blueprint map column */}
-        <OperationsCenter
-          activeSiteID={activeSiteID}
-          selectedTask={selectedTask}
-          checklist={checklist}
-          onToggleStep={toggleChecklistStep}
-        />
+          {/* 3. Center Operations blueprint map column */}
+          <OperationsCenter
+            activeSiteID={activeSiteID}
+            selectedTask={selectedTask}
+            checklist={checklist}
+            onToggleStep={toggleChecklistStep}
+          />
 
-        {/* 4. Right Shift Coach conversation feed column */}
-        <ShiftCoach
-          chatLog={chatLog}
-          chatInput={chatInput}
-          setChatInput={setChatInput}
-          submitChatMsg={submitChatMsg}
-          schedulerNodeID={schedulerNodeID}
-          schedulerLeader={schedulerLeader}
-          schedulerTriggeredCount={schedulerTriggeredCount}
-          forceStartTaskSweep={forceStartTaskSweep}
-          onA2UIActionTrigger={handleA2UIAction}
-          userName={userName}
-          userEmail={userEmail}
-        />
-      </main>
+          {/* 4. Right Shift Coach conversation feed column */}
+          <ShiftCoach
+            chatLog={chatLog}
+            chatInput={chatInput}
+            setChatInput={setChatInput}
+            submitChatMsg={submitChatMsg}
+            schedulerNodeID={schedulerNodeID}
+            schedulerLeader={schedulerLeader}
+            schedulerTriggeredCount={schedulerTriggeredCount}
+            forceStartTaskSweep={forceStartTaskSweep}
+            onA2UIActionTrigger={handleA2UIAction}
+            userName={userName}
+            userEmail={userEmail}
+          />
+        </main>
+      )}
 
       {/* 5. Pure Live dynamic Server Offline Overlay Card block */}
       <OfflineOverlay backendActive={backendActive} />

@@ -16,6 +16,7 @@ package persistence
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net"
 	"strings"
@@ -54,20 +55,31 @@ func InitDB(cfg DBConfig) (*gorm.DB, error) {
 				return nil, fmt.Errorf("failed to create alloydb dialer: %w", errDialer)
 			}
 
-			config, errCfg := pgx.ParseConfig(fmt.Sprintf("host=%s user=postgres sslmode=disable", connString))
+			user := cfg.User
+			if user == "" {
+				user = "postgres"
+			}
+			connStr := fmt.Sprintf("host=127.0.0.1 user=%s sslmode=disable", user)
+			if cfg.DBName != "" {
+				connStr += fmt.Sprintf(" dbname=%s", cfg.DBName)
+			}
+			if cfg.Password != "" {
+				connStr += fmt.Sprintf(" password=%s", cfg.Password)
+			}
+
+			config, errCfg := pgx.ParseConfig(connStr)
 			if errCfg != nil {
-				config, errCfg = pgx.ParseConfig(connString)
-				if errCfg != nil {
-					return nil, fmt.Errorf("failed to parse pgx config: %w", errCfg)
-				}
+				return nil, fmt.Errorf("failed to parse pgx config: %w", errCfg)
 			}
 
 			config.DialFunc = func(ctx context.Context, _, _ string) (net.Conn, error) {
 				return dialer.Dial(ctx, connString)
 			}
 
-			dbURI := stdlib.RegisterConnConfig(config)
-			db, err = gorm.Open(postgres.Open(dbURI), &gorm.Config{})
+			sqlDB := stdlib.OpenDB(*config)
+			db, err = gorm.Open(postgres.New(postgres.Config{
+				Conn: sqlDB,
+			}), &gorm.Config{})
 		} else {
 			db, err = gorm.Open(postgres.Open(connString), &gorm.Config{})
 		}
@@ -81,7 +93,7 @@ func InitDB(cfg DBConfig) (*gorm.DB, error) {
 		if user == "" {
 			user = "postgres"
 		}
-		connStr := fmt.Sprintf("host=%s user=%s sslmode=disable", cfg.Host, user)
+		connStr := fmt.Sprintf("host=127.0.0.1 user=%s sslmode=disable", user)
 		if cfg.DBName != "" {
 			connStr += fmt.Sprintf(" dbname=%s", cfg.DBName)
 		}
@@ -98,8 +110,10 @@ func InitDB(cfg DBConfig) (*gorm.DB, error) {
 			return dialer.Dial(ctx, cfg.Host)
 		}
 
-		dbURI := stdlib.RegisterConnConfig(config)
-		db, err = gorm.Open(postgres.Open(dbURI), &gorm.Config{})
+		sqlDB := stdlib.OpenDB(*config)
+		db, err = gorm.Open(postgres.New(postgres.Config{
+			Conn: sqlDB,
+		}), &gorm.Config{})
 	} else {
 		connString := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 			cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, cfg.SSLMode)
@@ -119,4 +133,33 @@ func InitDB(cfg DBConfig) (*gorm.DB, error) {
 	}
 
 	return db, nil
+}
+
+// OfflineConnPool implements a degraded gorm.ConnPool that returns the specified error for all queries.
+type OfflineConnPool struct {
+	Err error
+}
+
+func (p *OfflineConnPool) PrepareContext(ctx context.Context, query string) (*sql.Stmt, error) {
+	return nil, p.Err
+}
+
+func (p *OfflineConnPool) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return nil, p.Err
+}
+
+func (p *OfflineConnPool) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	return nil, p.Err
+}
+
+func (p *OfflineConnPool) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	return &sql.Row{}
+}
+
+// NewOfflineDB creates a degraded GORM database instance that returns the specified error for all queries.
+func NewOfflineDB(err error) (*gorm.DB, error) {
+	pool := &OfflineConnPool{Err: err}
+	return gorm.Open(postgres.New(postgres.Config{
+		Conn: pool,
+	}), &gorm.Config{})
 }

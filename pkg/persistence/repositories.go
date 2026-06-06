@@ -29,36 +29,58 @@ type UserRepository interface {
 	Update(ctx context.Context, u *model.User) error
 	AddRole(ctx context.Context, userID, roleID string) error
 	List(ctx context.Context) ([]*model.User, error)
+	ListRange(ctx context.Context, offset, limit int) ([]*model.User, error)
+	Delete(ctx context.Context, id string) error
 	ListActiveOnShiftUsers(ctx context.Context, siteID string) ([]*model.User, error)
 	CreateRole(ctx context.Context, r *model.Role) error
+	FindRoleByID(ctx context.Context, id string) (*model.Role, error)
+	UpdateRole(ctx context.Context, r *model.Role) error
+	DeleteRole(ctx context.Context, id string) error
 	ListRoles(ctx context.Context) ([]*model.Role, error)
+	ListRolesRange(ctx context.Context, offset, limit int) ([]*model.Role, error)
 }
 
 // OrganizationRepository manages corporate units/tenants.
 type OrganizationRepository interface {
 	Create(ctx context.Context, o *model.Organization) error
 	FindByID(ctx context.Context, id string) (*model.Organization, error)
+	Update(ctx context.Context, o *model.Organization) error
+	Delete(ctx context.Context, id string) error
 	AddUser(ctx context.Context, organizationID, userID string) error
 	List(ctx context.Context) ([]*model.Organization, error)
+	ListRange(ctx context.Context, offset, limit int) ([]*model.Organization, error)
 }
 
 // SiteRepository manages physical storefronts/facilities and sub-locations (fixtures/shelves).
 type SiteRepository interface {
 	Create(ctx context.Context, s *model.Site) error
 	FindByID(ctx context.Context, id string) (*model.Site, error)
+	Update(ctx context.Context, s *model.Site) error
+	Delete(ctx context.Context, id string) error
 	List(ctx context.Context) ([]*model.Site, error)
+	ListRange(ctx context.Context, offset, limit int) ([]*model.Site, error)
 	CreateLocation(ctx context.Context, l *model.Location) error
 	FindLocationByID(ctx context.Context, id string) (*model.Location, error)
+	UpdateLocation(ctx context.Context, l *model.Location) error
+	DeleteLocation(ctx context.Context, id string) error
+	ListLocations(ctx context.Context) ([]*model.Location, error)
+	ListLocationsRange(ctx context.Context, offset, limit int) ([]*model.Location, error)
 	CreateAsset(ctx context.Context, a *model.Asset) error
 	FindAssetByID(ctx context.Context, id string) (*model.Asset, error)
 	UpdateAsset(ctx context.Context, a *model.Asset) error
+	DeleteAsset(ctx context.Context, id string) error
+	ListAssets(ctx context.Context) ([]*model.Asset, error)
+	ListAssetsRange(ctx context.Context, offset, limit int) ([]*model.Asset, error)
 }
 
 // TaskRepository manages task definitions, rules, checklist templates, and certifications.
 type TaskRepository interface {
 	Create(ctx context.Context, t *model.Task) error
 	FindByID(ctx context.Context, id string) (*model.Task, error)
+	Update(ctx context.Context, t *model.Task) error
+	Delete(ctx context.Context, id string) error
 	List(ctx context.Context) ([]*model.Task, error)
+	ListRange(ctx context.Context, offset, limit int) ([]*model.Task, error)
 	AddApprovalRule(ctx context.Context, r *model.TaskApprovalRule) error
 }
 
@@ -133,6 +155,16 @@ func (r *userRepository) List(ctx context.Context) ([]*model.User, error) {
 	return users, err
 }
 
+func (r *userRepository) ListRange(ctx context.Context, offset, limit int) ([]*model.User, error) {
+	var users []*model.User
+	err := r.db.WithContext(ctx).Preload("Roles").Preload("Organizations").Preload("Sites").Offset(offset).Limit(limit).Find(&users).Error
+	return users, err
+}
+
+func (r *userRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&model.User{}, "id = ?", id).Error
+}
+
 func (r *userRepository) ListActiveOnShiftUsers(ctx context.Context, siteID string) ([]*model.User, error) {
 	var users []*model.User
 	err := r.db.WithContext(ctx).
@@ -147,14 +179,33 @@ func (r *userRepository) ListActiveOnShiftUsers(ctx context.Context, siteID stri
 	return users, err
 }
 
-
 func (r *userRepository) CreateRole(ctx context.Context, role *model.Role) error {
 	return r.db.WithContext(ctx).Create(role).Error
+}
+
+func (r *userRepository) FindRoleByID(ctx context.Context, id string) (*model.Role, error) {
+	var role model.Role
+	err := r.db.WithContext(ctx).First(&role, "id = ?", id).Error
+	return &role, err
+}
+
+func (r *userRepository) UpdateRole(ctx context.Context, role *model.Role) error {
+	return r.db.WithContext(ctx).Save(role).Error
+}
+
+func (r *userRepository) DeleteRole(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&model.Role{}, "id = ?", id).Error
 }
 
 func (r *userRepository) ListRoles(ctx context.Context) ([]*model.Role, error) {
 	var roles []*model.Role
 	err := r.db.WithContext(ctx).Find(&roles).Error
+	return roles, err
+}
+
+func (r *userRepository) ListRolesRange(ctx context.Context, offset, limit int) ([]*model.Role, error) {
+	var roles []*model.Role
+	err := r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&roles).Error
 	return roles, err
 }
 
@@ -182,6 +233,14 @@ func (r *organizationRepository) FindByID(ctx context.Context, id string) (*mode
 	return &o, err
 }
 
+func (r *organizationRepository) Update(ctx context.Context, o *model.Organization) error {
+	return r.db.WithContext(ctx).Save(o).Error
+}
+
+func (r *organizationRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&model.Organization{}, "id = ?", id).Error
+}
+
 func (r *organizationRepository) AddUser(ctx context.Context, organizationID, userID string) error {
 	uo := model.UserOrganization{OrganizationID: organizationID, UserID: userID}
 	return r.db.WithContext(ctx).Create(&uo).Error
@@ -190,6 +249,12 @@ func (r *organizationRepository) AddUser(ctx context.Context, organizationID, us
 func (r *organizationRepository) List(ctx context.Context) ([]*model.Organization, error) {
 	var orgs []*model.Organization
 	err := r.db.WithContext(ctx).Find(&orgs).Error
+	return orgs, err
+}
+
+func (r *organizationRepository) ListRange(ctx context.Context, offset, limit int) ([]*model.Organization, error) {
+	var orgs []*model.Organization
+	err := r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&orgs).Error
 	return orgs, err
 }
 
@@ -211,9 +276,25 @@ func (r *siteRepository) FindByID(ctx context.Context, id string) (*model.Site, 
 	return &s, err
 }
 
+func (r *siteRepository) Update(ctx context.Context, s *model.Site) error {
+	return r.db.WithContext(ctx).Save(s).Error
+}
+
+func (r *siteRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&model.Site{}, "id = ?", id).Error
+}
+
 func (r *siteRepository) List(ctx context.Context) ([]*model.Site, error) {
 	var list []*model.Site
 	if err := r.db.WithContext(ctx).Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (r *siteRepository) ListRange(ctx context.Context, offset, limit int) ([]*model.Site, error) {
+	var list []*model.Site
+	if err := r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&list).Error; err != nil {
 		return nil, err
 	}
 	return list, nil
@@ -229,6 +310,26 @@ func (r *siteRepository) FindLocationByID(ctx context.Context, id string) (*mode
 	return &l, err
 }
 
+func (r *siteRepository) UpdateLocation(ctx context.Context, l *model.Location) error {
+	return r.db.WithContext(ctx).Save(l).Error
+}
+
+func (r *siteRepository) DeleteLocation(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&model.Location{}, "id = ?", id).Error
+}
+
+func (r *siteRepository) ListLocations(ctx context.Context) ([]*model.Location, error) {
+	var list []*model.Location
+	err := r.db.WithContext(ctx).Find(&list).Error
+	return list, err
+}
+
+func (r *siteRepository) ListLocationsRange(ctx context.Context, offset, limit int) ([]*model.Location, error) {
+	var list []*model.Location
+	err := r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&list).Error
+	return list, err
+}
+
 func (r *siteRepository) CreateAsset(ctx context.Context, a *model.Asset) error {
 	return r.db.WithContext(ctx).Create(a).Error
 }
@@ -241,6 +342,22 @@ func (r *siteRepository) FindAssetByID(ctx context.Context, id string) (*model.A
 
 func (r *siteRepository) UpdateAsset(ctx context.Context, a *model.Asset) error {
 	return r.db.WithContext(ctx).Save(a).Error
+}
+
+func (r *siteRepository) DeleteAsset(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&model.Asset{}, "id = ?", id).Error
+}
+
+func (r *siteRepository) ListAssets(ctx context.Context) ([]*model.Asset, error) {
+	var list []*model.Asset
+	err := r.db.WithContext(ctx).Find(&list).Error
+	return list, err
+}
+
+func (r *siteRepository) ListAssetsRange(ctx context.Context, offset, limit int) ([]*model.Asset, error) {
+	var list []*model.Asset
+	err := r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&list).Error
+	return list, err
 }
 
 type taskRepository struct {
@@ -261,6 +378,14 @@ func (r *taskRepository) FindByID(ctx context.Context, id string) (*model.Task, 
 	return &t, err
 }
 
+func (r *taskRepository) Update(ctx context.Context, t *model.Task) error {
+	return r.db.WithContext(ctx).Save(t).Error
+}
+
+func (r *taskRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&model.Task{}, "id = ?", id).Error
+}
+
 func (r *taskRepository) AddApprovalRule(ctx context.Context, rule *model.TaskApprovalRule) error {
 	return r.db.WithContext(ctx).Create(rule).Error
 }
@@ -268,6 +393,12 @@ func (r *taskRepository) AddApprovalRule(ctx context.Context, rule *model.TaskAp
 func (r *taskRepository) List(ctx context.Context) ([]*model.Task, error) {
 	var tasks []*model.Task
 	err := r.db.WithContext(ctx).Preload("Assets").Preload("ApprovalRules").Preload("SOPs").Find(&tasks).Error
+	return tasks, err
+}
+
+func (r *taskRepository) ListRange(ctx context.Context, offset, limit int) ([]*model.Task, error) {
+	var tasks []*model.Task
+	err := r.db.WithContext(ctx).Preload("Assets").Preload("ApprovalRules").Preload("SOPs").Offset(offset).Limit(limit).Find(&tasks).Error
 	return tasks, err
 }
 

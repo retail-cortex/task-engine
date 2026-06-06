@@ -28,10 +28,10 @@ type TaskExecution struct {
 	SubjectExecutionID      *string    `gorm:"column:subject_execution_id;type:uuid;index;default:null"`
 	InitiatorID             *string    `gorm:"column:initiator_id;type:uuid;index;default:null"`
 	AssigneeID              *string    `gorm:"column:assignee_id;type:uuid;index;default:null"`
-	EventInstanceID         string     `gorm:"column:event_instance_id;type:uuid;not null;index"`
+	EventInstanceID         string     `gorm:"column:event_instance_id;type:uuid;not null;index;index:idx_task_executions_queue,priority:1"`
 	Description             string     `gorm:"type:text;default:null"`
 	Status                  string     `gorm:"type:varchar(50);not null;default:'PENDING';index:idx_task_executions_status_locked_at,priority:1"`
-	Priority                int        `gorm:"not null;default:3"`
+	Priority                int        `gorm:"not null;default:3;index:idx_task_executions_queue,priority:2"`
 	DueAt                   *time.Time `gorm:"default:null"`
 	PrerequisiteExecutionID *string    `gorm:"column:prerequisite_execution_id;type:uuid;index;default:null"`
 	Decision                *string    `gorm:"type:varchar(50);default:null"`
@@ -43,7 +43,7 @@ type TaskExecution struct {
 	RetryCount              int        `gorm:"not null;default:0"`
 	MaxRetries              int        `gorm:"not null;default:3"`
 	LastError               *string    `gorm:"type:text;default:null"`
-	CreatedAt               time.Time  `gorm:"not null;default:now()"`
+	CreatedAt               time.Time  `gorm:"not null;default:now();index:idx_task_executions_queue,priority:3"`
 	UpdatedAt               time.Time  `gorm:"not null;default:now()"`
 	Version                 int        `gorm:"not null;default:1"`
 }

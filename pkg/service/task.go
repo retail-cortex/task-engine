@@ -39,6 +39,8 @@ type TaskService interface {
 	RejectTrade(ctx context.Context, tradeID, targetUserID string) error
 	ClaimTask(ctx context.Context, executionID, userID string, userRoleIDs []string) error
 	ListActiveSites(ctx context.Context) ([]*model.Site, error)
+	GetSiteLocations(ctx context.Context, siteID string) ([]*model.Location, error)
+	GetLocationByID(ctx context.Context, id string) (*model.Location, error)
 }
 
 type taskService struct {
@@ -369,4 +371,20 @@ func (s *taskService) ClaimTask(ctx context.Context, executionID, userID string,
 	trade.Status = "APPROVED"
 	trade.ProposedAssigneeID = userID
 	return s.execRepo.UpdateTrade(ctxWithUser, trade)
+}
+
+func (s *taskService) GetSiteLocations(ctx context.Context, siteID string) ([]*model.Location, error) {
+	site, err := s.siteRepo.FindByID(ctx, siteID)
+	if err != nil {
+		return nil, err
+	}
+	var locs []*model.Location
+	for i := range site.Locations {
+		locs = append(locs, &site.Locations[i])
+	}
+	return locs, nil
+}
+
+func (s *taskService) GetLocationByID(ctx context.Context, id string) (*model.Location, error) {
+	return s.siteRepo.FindLocationByID(ctx, id)
 }

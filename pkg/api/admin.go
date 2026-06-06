@@ -16,6 +16,7 @@ package api
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rmcguinness/gemini_task_engine/pkg/model"
@@ -34,7 +35,35 @@ func NewAdminHandler(adminService service.AdminService, schedulerService service
 	}
 }
 
+func parseOffsetLimit(c *gin.Context) (int, int, bool) {
+	offsetStr := c.Query("offset")
+	limitStr := c.Query("limit")
+	if offsetStr == "" && limitStr == "" {
+		return 0, 0, false
+	}
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 10
+	}
+	return offset, limit, true
+}
+
+// --- User Handlers ---
+
 func (h *AdminHandler) ListUsers(c *gin.Context) {
+	if offset, limit, ok := parseOffsetLimit(c); ok {
+		users, err := h.adminService.ListUsersRange(c.Request.Context(), offset, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, users)
+		return
+	}
 	users, err := h.adminService.ListUsers(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -42,6 +71,53 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, users)
 }
+
+func (h *AdminHandler) GetUser(c *gin.Context) {
+	id := c.Param("id")
+	user, err := h.adminService.GetUserByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, user)
+}
+
+func (h *AdminHandler) CreateUser(c *gin.Context) {
+	var user model.User
+	if err := c.ShouldBindJSON(&user); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.adminService.RegisterUser(c.Request.Context(), &user); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, user)
+}
+
+func (h *AdminHandler) UpdateUser(c *gin.Context) {
+	var user model.User
+	if err := c.ShouldBindJSON(&user); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.adminService.UpdateUser(c.Request.Context(), &user); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, user)
+}
+
+func (h *AdminHandler) DeleteUser(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.adminService.DeleteUser(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+// --- Role Handlers ---
 
 func (h *AdminHandler) CreateRole(c *gin.Context) {
 	var role model.Role
@@ -54,6 +130,56 @@ func (h *AdminHandler) CreateRole(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, role)
+}
+
+func (h *AdminHandler) GetRole(c *gin.Context) {
+	id := c.Param("id")
+	role, err := h.adminService.GetRoleByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, role)
+}
+
+func (h *AdminHandler) UpdateRole(c *gin.Context) {
+	var role model.Role
+	if err := c.ShouldBindJSON(&role); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.adminService.UpdateRole(c.Request.Context(), &role); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, role)
+}
+
+func (h *AdminHandler) DeleteRole(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.adminService.DeleteRole(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func (h *AdminHandler) ListRoles(c *gin.Context) {
+	if offset, limit, ok := parseOffsetLimit(c); ok {
+		roles, err := h.adminService.ListRolesRange(c.Request.Context(), offset, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, roles)
+		return
+	}
+	roles, err := h.adminService.ListRoles(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, roles)
 }
 
 func (h *AdminHandler) AssignRole(c *gin.Context) {
@@ -72,6 +198,8 @@ func (h *AdminHandler) AssignRole(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
+// --- Organization Handlers ---
+
 func (h *AdminHandler) CreateOrganization(c *gin.Context) {
 	var org model.Organization
 	if err := c.ShouldBindJSON(&org); err != nil {
@@ -85,11 +213,61 @@ func (h *AdminHandler) CreateOrganization(c *gin.Context) {
 	c.JSON(http.StatusCreated, org)
 }
 
+func (h *AdminHandler) GetOrganization(c *gin.Context) {
+	id := c.Param("id")
+	org, err := h.adminService.GetOrganizationByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, org)
+}
+
+func (h *AdminHandler) UpdateOrganization(c *gin.Context) {
+	var org model.Organization
+	if err := c.ShouldBindJSON(&org); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.adminService.UpdateOrganization(c.Request.Context(), &org); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, org)
+}
+
+func (h *AdminHandler) DeleteOrganization(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.adminService.DeleteOrganization(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func (h *AdminHandler) ListOrganizations(c *gin.Context) {
+	if offset, limit, ok := parseOffsetLimit(c); ok {
+		orgs, err := h.adminService.ListOrganizationsRange(c.Request.Context(), offset, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, orgs)
+		return
+	}
+	orgs, err := h.adminService.ListOrganizations(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, orgs)
+}
+
 func (h *AdminHandler) AssignUserToOrganization(c *gin.Context) {
-	orgID := c.Param("orgId")
+	orgID := c.Param("id")
 	userID := c.Param("userId")
 	if orgID == "" || userID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "orgId and userId parameters are required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id and userId parameters are required"})
 		return
 	}
 	if err := h.adminService.AssignUserToOrganization(c.Request.Context(), orgID, userID); err != nil {
@@ -99,19 +277,12 @@ func (h *AdminHandler) AssignUserToOrganization(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
-func (h *AdminHandler) ListOrganizations(c *gin.Context) {
-	orgs, err := h.adminService.ListOrganizations(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, orgs)
-}
+// --- Site Handlers ---
 
 func (h *AdminHandler) CreateSite(c *gin.Context) {
-	orgID := c.Param("orgId")
+	orgID := c.Param("id")
 	if orgID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "orgId parameter is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id parameter is required"})
 		return
 	}
 	var site model.Site
@@ -126,6 +297,58 @@ func (h *AdminHandler) CreateSite(c *gin.Context) {
 	}
 	c.JSON(http.StatusCreated, site)
 }
+
+func (h *AdminHandler) GetSite(c *gin.Context) {
+	id := c.Param("id")
+	site, err := h.adminService.GetSiteByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, site)
+}
+
+func (h *AdminHandler) UpdateSite(c *gin.Context) {
+	var site model.Site
+	if err := c.ShouldBindJSON(&site); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.adminService.UpdateSite(c.Request.Context(), &site); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, site)
+}
+
+func (h *AdminHandler) DeleteSite(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.adminService.DeleteSite(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func (h *AdminHandler) ListSites(c *gin.Context) {
+	if offset, limit, ok := parseOffsetLimit(c); ok {
+		sites, err := h.adminService.ListSitesRange(c.Request.Context(), offset, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, sites)
+		return
+	}
+	sites, err := h.adminService.ListSites(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, sites)
+}
+
+// --- Location Handlers ---
 
 func (h *AdminHandler) CreateLocation(c *gin.Context) {
 	siteID := c.Param("siteId")
@@ -146,6 +369,58 @@ func (h *AdminHandler) CreateLocation(c *gin.Context) {
 	c.JSON(http.StatusCreated, loc)
 }
 
+func (h *AdminHandler) GetLocation(c *gin.Context) {
+	id := c.Param("id")
+	loc, err := h.adminService.GetLocationByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, loc)
+}
+
+func (h *AdminHandler) UpdateLocation(c *gin.Context) {
+	var loc model.Location
+	if err := c.ShouldBindJSON(&loc); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.adminService.UpdateLocation(c.Request.Context(), &loc); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, loc)
+}
+
+func (h *AdminHandler) DeleteLocation(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.adminService.DeleteLocation(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func (h *AdminHandler) ListLocations(c *gin.Context) {
+	if offset, limit, ok := parseOffsetLimit(c); ok {
+		locs, err := h.adminService.ListLocationsRange(c.Request.Context(), offset, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, locs)
+		return
+	}
+	locs, err := h.adminService.ListLocations(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, locs)
+}
+
+// --- Asset Handlers ---
+
 func (h *AdminHandler) CreateAsset(c *gin.Context) {
 	locationID := c.Param("locationId")
 	if locationID == "" {
@@ -165,6 +440,58 @@ func (h *AdminHandler) CreateAsset(c *gin.Context) {
 	c.JSON(http.StatusCreated, asset)
 }
 
+func (h *AdminHandler) GetAsset(c *gin.Context) {
+	id := c.Param("id")
+	asset, err := h.adminService.GetAssetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, asset)
+}
+
+func (h *AdminHandler) UpdateAsset(c *gin.Context) {
+	var asset model.Asset
+	if err := c.ShouldBindJSON(&asset); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.adminService.UpdateAsset(c.Request.Context(), &asset); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, asset)
+}
+
+func (h *AdminHandler) DeleteAsset(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.adminService.DeleteAsset(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func (h *AdminHandler) ListAssets(c *gin.Context) {
+	if offset, limit, ok := parseOffsetLimit(c); ok {
+		assets, err := h.adminService.ListAssetsRange(c.Request.Context(), offset, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, assets)
+		return
+	}
+	assets, err := h.adminService.ListAssets(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, assets)
+}
+
+// --- Task Handlers ---
+
 func (h *AdminHandler) CreateTaskTemplate(c *gin.Context) {
 	var task model.Task
 	if err := c.ShouldBindJSON(&task); err != nil {
@@ -177,6 +504,58 @@ func (h *AdminHandler) CreateTaskTemplate(c *gin.Context) {
 	}
 	c.JSON(http.StatusCreated, task)
 }
+
+func (h *AdminHandler) GetTaskTemplate(c *gin.Context) {
+	id := c.Param("id")
+	task, err := h.adminService.GetTaskTemplateByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, task)
+}
+
+func (h *AdminHandler) UpdateTaskTemplate(c *gin.Context) {
+	var task model.Task
+	if err := c.ShouldBindJSON(&task); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.adminService.UpdateTaskTemplate(c.Request.Context(), &task); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, task)
+}
+
+func (h *AdminHandler) DeleteTaskTemplate(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.adminService.DeleteTaskTemplate(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func (h *AdminHandler) ListTaskTemplates(c *gin.Context) {
+	if offset, limit, ok := parseOffsetLimit(c); ok {
+		tasks, err := h.adminService.ListTaskTemplatesRange(c.Request.Context(), offset, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, tasks)
+		return
+	}
+	tasks, err := h.adminService.ListTaskTemplates(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, tasks)
+}
+
+// --- Scheduler & Operational Controls ---
 
 func (h *AdminHandler) TriggerSchedulerSweep(c *gin.Context) {
 	err := h.schedulerService.ForceTriggerBatchSweep(c.Request.Context())

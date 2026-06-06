@@ -1,0 +1,23 @@
+FROM python:3.13-slim
+
+# Copy uv binary directly from official release container for ultra-fast package resolution
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Set working directory
+WORKDIR /app
+
+
+# Copy the agent codebase package
+COPY cmd/task_agent/ cmd/task_agent/
+
+# Install python dependencies system-wide utilizing uv pip compiler
+RUN uv pip install --system -r cmd/task_agent/pyproject.toml
+
+# Set environment runtime configurations
+ENV MODENV_RUNTIME=dev
+ENV PORT=8080
+ENV PYTHONUNBUFFERED=1
+EXPOSE 8080
+
+# Execute server
+ENTRYPOINT ["python3", "cmd/task_agent/main.py"]

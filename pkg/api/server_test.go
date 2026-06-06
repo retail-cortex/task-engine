@@ -46,6 +46,9 @@ type mockAdminService struct {
 	AssignUserToOrganizationFunc func(ctx context.Context, orgID, userID string) error
 	ListOrganizationsFunc        func(ctx context.Context) ([]*model.Organization, error)
 	FindUserByOAuthFunc          func(ctx context.Context, provider, oauthID string) (*model.User, error)
+	GetUserByIDFunc              func(ctx context.Context, id string) (*model.User, error)
+	DeleteUserFunc               func(ctx context.Context, id string) error
+	ListUsersRangeFunc           func(ctx context.Context, offset, limit int) ([]*model.User, error)
 }
 
 func (m *mockAdminService) ListUsers(ctx context.Context) ([]*model.User, error) {
@@ -146,6 +149,54 @@ func (m *mockAdminService) ListOrganizations(ctx context.Context) ([]*model.Orga
 	return nil, nil
 }
 
+// Stubs for new AdminService methods
+func (m *mockAdminService) GetUserByID(ctx context.Context, id string) (*model.User, error) {
+	if m.GetUserByIDFunc != nil {
+		return m.GetUserByIDFunc(ctx, id)
+	}
+	return nil, nil
+}
+func (m *mockAdminService) DeleteUser(ctx context.Context, id string) error {
+	if m.DeleteUserFunc != nil {
+		return m.DeleteUserFunc(ctx, id)
+	}
+	return nil
+}
+func (m *mockAdminService) ListUsersRange(ctx context.Context, offset, limit int) ([]*model.User, error) {
+	if m.ListUsersRangeFunc != nil {
+		return m.ListUsersRangeFunc(ctx, offset, limit)
+	}
+	return nil, nil
+}
+func (m *mockAdminService) GetRoleByID(ctx context.Context, id string) (*model.Role, error) { return nil, nil }
+func (m *mockAdminService) UpdateRole(ctx context.Context, role *model.Role) error { return nil }
+func (m *mockAdminService) DeleteRole(ctx context.Context, id string) error { return nil }
+func (m *mockAdminService) ListRolesRange(ctx context.Context, offset, limit int) ([]*model.Role, error) { return nil, nil }
+func (m *mockAdminService) GetOrganizationByID(ctx context.Context, id string) (*model.Organization, error) { return nil, nil }
+func (m *mockAdminService) UpdateOrganization(ctx context.Context, org *model.Organization) error { return nil }
+func (m *mockAdminService) DeleteOrganization(ctx context.Context, id string) error { return nil }
+func (m *mockAdminService) ListOrganizationsRange(ctx context.Context, offset, limit int) ([]*model.Organization, error) { return nil, nil }
+func (m *mockAdminService) GetSiteByID(ctx context.Context, id string) (*model.Site, error) { return nil, nil }
+func (m *mockAdminService) UpdateSite(ctx context.Context, site *model.Site) error { return nil }
+func (m *mockAdminService) DeleteSite(ctx context.Context, id string) error { return nil }
+func (m *mockAdminService) ListSites(ctx context.Context) ([]*model.Site, error) { return nil, nil }
+func (m *mockAdminService) ListSitesRange(ctx context.Context, offset, limit int) ([]*model.Site, error) { return nil, nil }
+func (m *mockAdminService) GetLocationByID(ctx context.Context, id string) (*model.Location, error) { return nil, nil }
+func (m *mockAdminService) UpdateLocation(ctx context.Context, loc *model.Location) error { return nil }
+func (m *mockAdminService) DeleteLocation(ctx context.Context, id string) error { return nil }
+func (m *mockAdminService) ListLocations(ctx context.Context) ([]*model.Location, error) { return nil, nil }
+func (m *mockAdminService) ListLocationsRange(ctx context.Context, offset, limit int) ([]*model.Location, error) { return nil, nil }
+func (m *mockAdminService) GetAssetByID(ctx context.Context, id string) (*model.Asset, error) { return nil, nil }
+func (m *mockAdminService) UpdateAsset(ctx context.Context, asset *model.Asset) error { return nil }
+func (m *mockAdminService) DeleteAsset(ctx context.Context, id string) error { return nil }
+func (m *mockAdminService) ListAssets(ctx context.Context) ([]*model.Asset, error) { return nil, nil }
+func (m *mockAdminService) ListAssetsRange(ctx context.Context, offset, limit int) ([]*model.Asset, error) { return nil, nil }
+func (m *mockAdminService) GetTaskTemplateByID(ctx context.Context, id string) (*model.Task, error) { return nil, nil }
+func (m *mockAdminService) UpdateTaskTemplate(ctx context.Context, task *model.Task) error { return nil }
+func (m *mockAdminService) DeleteTaskTemplate(ctx context.Context, id string) error { return nil }
+func (m *mockAdminService) ListTaskTemplates(ctx context.Context) ([]*model.Task, error) { return nil, nil }
+func (m *mockAdminService) ListTaskTemplatesRange(ctx context.Context, offset, limit int) ([]*model.Task, error) { return nil, nil }
+
 type mockTaskService struct {
 	GetQueueFunc                func(ctx context.Context, siteID string) ([]*model.TaskExecution, error)
 	GetOrgTasksFunc             func(ctx context.Context, orgID string) ([]*model.TaskExecution, error)
@@ -159,6 +210,8 @@ type mockTaskService struct {
 	RejectTradeFunc            func(ctx context.Context, tradeID, targetUserID string) error
 	ClaimTaskFunc              func(ctx context.Context, executionID, userID string, userRoleIDs []string) error
 	ListActiveSitesFunc         func(ctx context.Context) ([]*model.Site, error)
+	GetSiteLocationsFunc        func(ctx context.Context, siteID string) ([]*model.Location, error)
+	GetLocationByIDFunc         func(ctx context.Context, id string) (*model.Location, error)
 }
 
 func (m *mockTaskService) GetQueue(ctx context.Context, siteID string) ([]*model.TaskExecution, error) {
@@ -243,6 +296,20 @@ func (m *mockTaskService) ClaimTask(ctx context.Context, executionID, userID str
 		return m.ClaimTaskFunc(ctx, executionID, userID, userRoleIDs)
 	}
 	return nil
+}
+
+func (m *mockTaskService) GetSiteLocations(ctx context.Context, siteID string) ([]*model.Location, error) {
+	if m.GetSiteLocationsFunc != nil {
+		return m.GetSiteLocationsFunc(ctx, siteID)
+	}
+	return nil, nil
+}
+
+func (m *mockTaskService) GetLocationByID(ctx context.Context, id string) (*model.Location, error) {
+	if m.GetLocationByIDFunc != nil {
+		return m.GetLocationByIDFunc(ctx, id)
+	}
+	return nil, nil
 }
 
 type mockShiftService struct {
@@ -413,12 +480,109 @@ func TestReadiness(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.Engine().ServeHTTP(w, req)
 
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	var body map[string]string
+	err = json.Unmarshal(w.Body.Bytes(), &body)
+	assert.NoError(t, err)
+	assert.Equal(t, "healthy", body["status"])
+	assert.Equal(t, "disconnected: no database initialized", body["database"])
+}
+
+func TestLiveness(t *testing.T) {
+	adminSvc := &mockAdminService{}
+	taskSvc := &mockTaskService{}
+	shiftSvc := &mockShiftService{}
+	ragSvc := &mockRAGService{}
+	automationSvc := &mockAutomationService{}
+	schedulerSvc := &mockSchedulerService{}
+
+	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc, automationSvc, schedulerSvc)
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/liveness", nil)
+	w := httptest.NewRecorder()
+	srv.Engine().ServeHTTP(w, req)
+
 	assert.Equal(t, http.StatusOK, w.Code)
 	var body map[string]string
 	err = json.Unmarshal(w.Body.Bytes(), &body)
 	assert.NoError(t, err)
 	assert.Equal(t, "healthy", body["status"])
-	assert.Equal(t, "connected", body["database"])
+}
+
+func TestStartup(t *testing.T) {
+	adminSvc := &mockAdminService{}
+	taskSvc := &mockTaskService{}
+	shiftSvc := &mockShiftService{}
+	ragSvc := &mockRAGService{}
+	automationSvc := &mockAutomationService{}
+	schedulerSvc := &mockSchedulerService{}
+
+	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc, automationSvc, schedulerSvc)
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/startup", nil)
+	w := httptest.NewRecorder()
+	srv.Engine().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var body map[string]string
+	err = json.Unmarshal(w.Body.Bytes(), &body)
+	assert.NoError(t, err)
+	assert.Equal(t, "healthy", body["status"])
+}
+
+func TestSwaggerEndpoints(t *testing.T) {
+	adminSvc := &mockAdminService{}
+	taskSvc := &mockTaskService{}
+	shiftSvc := &mockShiftService{}
+	ragSvc := &mockRAGService{}
+	automationSvc := &mockAutomationService{}
+	schedulerSvc := &mockSchedulerService{}
+
+	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc, automationSvc, schedulerSvc)
+	assert.NoError(t, err)
+
+	// 1. Test GET /swagger
+	req := httptest.NewRequest("GET", "/swagger", nil)
+	w := httptest.NewRecorder()
+	srv.Engine().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "Gemini Task Engine - API Explorer")
+
+	// 2. Test GET /swagger/openapi.json
+	req = httptest.NewRequest("GET", "/swagger/openapi.json", nil)
+	w = httptest.NewRecorder()
+	srv.Engine().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var body map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &body)
+	assert.NoError(t, err)
+	assert.Equal(t, "Gemini Task Engine API", body["info"].(map[string]interface{})["title"])
+}
+
+func TestStaticMCPEndpoint(t *testing.T) {
+	adminSvc := &mockAdminService{}
+	taskSvc := &mockTaskService{}
+	shiftSvc := &mockShiftService{}
+	ragSvc := &mockRAGService{}
+	automationSvc := &mockAutomationService{}
+	schedulerSvc := &mockSchedulerService{}
+
+	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc, automationSvc, schedulerSvc)
+	assert.NoError(t, err)
+
+	// Verify route registration in Gin Engine
+	found := false
+	for _, route := range srv.Engine().Routes() {
+		if route.Path == "/api/v1/mcp" && route.Method == "POST" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "Expected to find POST /api/v1/mcp route registered")
 }
 
 func TestCORSHeaders(t *testing.T) {
@@ -725,5 +889,67 @@ func TestOperationalEndpointsFailure(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.Contains(t, w.Body.String(), "database failure")
+	})
+}
+
+func TestAdminCRUDEndpoints(t *testing.T) {
+	adminSvc := &mockAdminService{}
+	taskSvc := &mockTaskService{}
+	shiftSvc := &mockShiftService{}
+	ragSvc := &mockRAGService{}
+	automationSvc := &mockAutomationService{}
+	schedulerSvc := &mockSchedulerService{}
+
+	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc, automationSvc, schedulerSvc)
+	assert.NoError(t, err)
+
+	t.Run("GetUserByID - Success", func(t *testing.T) {
+		var capturedID string
+		adminSvc.GetUserByIDFunc = func(ctx context.Context, id string) (*model.User, error) {
+			capturedID = id
+			return &model.User{ID: id, Email: "test@example.com"}, nil
+		}
+
+		req := httptest.NewRequest("GET", "/api/v1/admin/users/user-123", nil)
+		w := httptest.NewRecorder()
+		srv.Engine().ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "user-123", capturedID)
+		assert.Contains(t, w.Body.String(), "test@example.com")
+	})
+
+	t.Run("ListUsersRange - Success", func(t *testing.T) {
+		var capturedOffset, capturedLimit int
+		adminSvc.ListUsersRangeFunc = func(ctx context.Context, offset, limit int) ([]*model.User, error) {
+			capturedOffset = offset
+			capturedLimit = limit
+			return []*model.User{{ID: "user-range", Email: "range@example.com"}}, nil
+		}
+
+		req := httptest.NewRequest("GET", "/api/v1/admin/users?offset=5&limit=15", nil)
+		w := httptest.NewRecorder()
+		srv.Engine().ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, 5, capturedOffset)
+		assert.Equal(t, 15, capturedLimit)
+		assert.Contains(t, w.Body.String(), "range@example.com")
+	})
+
+	t.Run("DeleteUser - Success", func(t *testing.T) {
+		var capturedID string
+		adminSvc.DeleteUserFunc = func(ctx context.Context, id string) error {
+			capturedID = id
+			return nil
+		}
+
+		req := httptest.NewRequest("DELETE", "/api/v1/admin/users/user-delete", nil)
+		w := httptest.NewRecorder()
+		srv.Engine().ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "user-delete", capturedID)
+		assert.Contains(t, w.Body.String(), "success")
 	})
 }

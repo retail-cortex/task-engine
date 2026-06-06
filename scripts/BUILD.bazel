@@ -18,3 +18,16 @@ exports_files([
     "icao_codes.sql",
     "time_zones.sql",
 ])
+
+sh_test(
+    name = "e2e_test",
+    srcs = ["e2e_test.sh"],
+    data = [
+        "e2e_test.py",
+        ":dev_events.sql",
+    ],
+    tags = [
+        "local",
+        "manual",
+    ],
+)

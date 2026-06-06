@@ -85,3 +85,6 @@ filegroup(
 )
 use_repo(hugo_deps, "hugo", "hugo_book")
 
+# Python compilation rules
+bazel_dep(name = "rules_python", version = "0.35.0")
+

@@ -32,7 +32,7 @@ OUTPUT_SQL_PATH: str = os.path.join(WORKSPACE_ROOT, "scripts/seed_store_tasks.sq
 
 # Static Global References (Matching dev_events.sql and models)
 ROLE_SITE_ASSOCIATE: str = "77777777-7777-7777-7777-777777770004"
-SYSTEM_ADMIN_USER_ID: str = "88888888-8888-8888-8888-888888880002" # Ryan's Master Administrator ID
+SYSTEM_ADMIN_USER_ID: str = "b75c1a02-c884-40ed-a3f8-8b95f3ff7539" # Ryan's Master Administrator ID
 
 # Task Template Definitions
 TEMPLATE_REGISTER_OPEN: str = "d000fa44-0000-0000-0000-000000000000"
@@ -377,7 +377,7 @@ def main() -> None:
     sql_statements.append("-- EXPLICIT SEEDS FOR SUPERVISOR RYAN (ryan@rmcguinness.altostrat.com)")
     sql_statements.append("-- ==============================================================================")
     
-    ryan_user_id = "88888888-8888-8888-8888-888888880002"
+    ryan_user_id = "b75c1a02-c884-40ed-a3f8-8b95f3ff7539"
     ryan_event_id = "99999999-9999-9999-9999-999999990100"
     ryan_schedule_id = "55555555-5555-7777-0000-000000000002"
     ryan_seattle_site_id = "44444444-4444-4444-4444-444444440000"

@@ -102,7 +102,7 @@ type Event struct {
 type UserEventSchedule struct {
 	ID        string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	UserID    string    `gorm:"type:uuid;not null;uniqueIndex:idx_user_event,priority:1"`
-	EventID   string    `gorm:"type:uuid;not null;uniqueIndex:idx_user_event,priority:2"`
+	EventID   string    `gorm:"type:uuid;not null;index;uniqueIndex:idx_user_event,priority:2"`
 	StartDate time.Time `gorm:"not null"`
 	EndDate   time.Time `gorm:"not null"`
 	Timezone  string    `gorm:"type:varchar(50);not null"`
@@ -116,6 +116,6 @@ type UserEventInstance struct {
 	ScheduleID        string      `gorm:"type:uuid;not null;uniqueIndex:idx_schedule_instance,priority:1"`
 	InstanceStartDate time.Time   `gorm:"not null;uniqueIndex:idx_schedule_instance,priority:2"`
 	InstanceEndDate   time.Time   `gorm:"not null"`
-	EventStatus       EventStatus `gorm:"type:varchar(50);not null;default:'EventScheduled'"`
+	EventStatus       EventStatus `gorm:"type:varchar(50);not null;default:'EventScheduled';index"`
 	CreatedAt         time.Time   `gorm:"not null;default:now()"`
 }

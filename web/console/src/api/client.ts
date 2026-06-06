@@ -199,5 +199,285 @@ export const ApiClient = {
     });
     if (!res.ok) throw new ResponseError("Streaming alert trigger transaction failed", res.status);
     return res.json();
+  },
+
+  // --- ADMIN API EXTENSIONS ---
+
+  // Users
+  async fetchUser(id: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/users/${id}`, { headers: this.getAuthHeaders(token) });
+    if (!res.ok) throw new ResponseError("Fetch user failed", res.status);
+    return res.json();
+  },
+  async createUser(user: any, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/users`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(user)
+    });
+    if (!res.ok) throw new ResponseError("Create user failed", res.status);
+    return res.json();
+  },
+  async updateUser(id: string, user: any, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/users/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(user)
+    });
+    if (!res.ok) throw new ResponseError("Update user failed", res.status);
+    return res.json();
+  },
+  async deleteUser(id: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/users/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(token)
+    });
+    if (!res.ok) throw new ResponseError("Delete user failed", res.status);
+    return res.json();
+  },
+  async assignUserRole(id: string, roleId: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/users/${id}/roles`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify({ role_id: roleId })
+    });
+    if (!res.ok) throw new ResponseError("Assign role failed", res.status);
+    return res.json();
+  },
+
+  // Roles
+  async fetchRoles(token: string | null = activeToken): Promise<any[]> {
+    const res = await fetch(`/api/v1/admin/roles`, { headers: this.getAuthHeaders(token) });
+    if (!res.ok) throw new ResponseError("Fetch roles failed", res.status);
+    return res.json();
+  },
+  async fetchRole(id: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/roles/${id}`, { headers: this.getAuthHeaders(token) });
+    if (!res.ok) throw new ResponseError("Fetch role failed", res.status);
+    return res.json();
+  },
+  async createRole(role: any, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/roles`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(role)
+    });
+    if (!res.ok) throw new ResponseError("Create role failed", res.status);
+    return res.json();
+  },
+  async updateRole(id: string, role: any, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/roles/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(role)
+    });
+    if (!res.ok) throw new ResponseError("Update role failed", res.status);
+    return res.json();
+  },
+  async deleteRole(id: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/roles/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(token)
+    });
+    if (!res.ok) throw new ResponseError("Delete role failed", res.status);
+    return res.json();
+  },
+
+  // Organizations
+  async fetchOrganizations(token: string | null = activeToken): Promise<any[]> {
+    const res = await fetch(`/api/v1/admin/organizations`, { headers: this.getAuthHeaders(token) });
+    if (!res.ok) throw new ResponseError("Fetch organizations failed", res.status);
+    return res.json();
+  },
+  async fetchOrganization(id: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/organizations/${id}`, { headers: this.getAuthHeaders(token) });
+    if (!res.ok) throw new ResponseError("Fetch organization failed", res.status);
+    return res.json();
+  },
+  async createOrganization(org: any, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/organizations`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(org)
+    });
+    if (!res.ok) throw new ResponseError("Create organization failed", res.status);
+    return res.json();
+  },
+  async updateOrganization(id: string, org: any, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/organizations/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(org)
+    });
+    if (!res.ok) throw new ResponseError("Update organization failed", res.status);
+    return res.json();
+  },
+  async deleteOrganization(id: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/organizations/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(token)
+    });
+    if (!res.ok) throw new ResponseError("Delete organization failed", res.status);
+    return res.json();
+  },
+  async assignUserToOrganization(orgId: string, userId: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/organizations/${orgId}/users/${userId}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(token)
+    });
+    if (!res.ok) throw new ResponseError("Assign user to organization failed", res.status);
+    return res.json();
+  },
+
+  // Sites
+  async fetchSitesAdmin(token: string | null = activeToken): Promise<any[]> {
+    const res = await fetch(`/api/v1/admin/sites`, { headers: this.getAuthHeaders(token) });
+    if (!res.ok) throw new ResponseError("Fetch admin sites failed", res.status);
+    return res.json();
+  },
+  async fetchSite(id: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/sites/${id}`, { headers: this.getAuthHeaders(token) });
+    if (!res.ok) throw new ResponseError("Fetch site failed", res.status);
+    return res.json();
+  },
+  async createSite(orgId: string, site: any, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/organizations/${orgId}/sites`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(site)
+    });
+    if (!res.ok) throw new ResponseError("Create site failed", res.status);
+    return res.json();
+  },
+  async updateSite(id: string, site: any, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/sites/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(site)
+    });
+    if (!res.ok) throw new ResponseError("Update site failed", res.status);
+    return res.json();
+  },
+  async deleteSite(id: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/sites/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(token)
+    });
+    if (!res.ok) throw new ResponseError("Delete site failed", res.status);
+    return res.json();
+  },
+
+  // Locations
+  async fetchLocations(token: string | null = activeToken): Promise<any[]> {
+    const res = await fetch(`/api/v1/admin/locations`, { headers: this.getAuthHeaders(token) });
+    if (!res.ok) throw new ResponseError("Fetch locations failed", res.status);
+    return res.json();
+  },
+  async fetchLocation(id: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/locations/${id}`, { headers: this.getAuthHeaders(token) });
+    if (!res.ok) throw new ResponseError("Fetch location failed", res.status);
+    return res.json();
+  },
+  async createLocation(orgId: string, siteId: string, location: any, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/organizations/${orgId}/sites/${siteId}/locations`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(location)
+    });
+    if (!res.ok) throw new ResponseError("Create location failed", res.status);
+    return res.json();
+  },
+  async updateLocation(id: string, location: any, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/locations/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(location)
+    });
+    if (!res.ok) throw new ResponseError("Update location failed", res.status);
+    return res.json();
+  },
+  async deleteLocation(id: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/locations/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(token)
+    });
+    if (!res.ok) throw new ResponseError("Delete location failed", res.status);
+    return res.json();
+  },
+
+  // Assets
+  async fetchAssets(token: string | null = activeToken): Promise<any[]> {
+    const res = await fetch(`/api/v1/admin/assets`, { headers: this.getAuthHeaders(token) });
+    if (!res.ok) throw new ResponseError("Fetch assets failed", res.status);
+    return res.json();
+  },
+  async fetchAsset(id: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/assets/${id}`, { headers: this.getAuthHeaders(token) });
+    if (!res.ok) throw new ResponseError("Fetch asset failed", res.status);
+    return res.json();
+  },
+  async createAsset(orgId: string, siteId: string, locationId: string, asset: any, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/organizations/${orgId}/sites/${siteId}/locations/${locationId}/assets`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(asset)
+    });
+    if (!res.ok) throw new ResponseError("Create asset failed", res.status);
+    return res.json();
+  },
+  async updateAsset(id: string, asset: any, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/assets/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(asset)
+    });
+    if (!res.ok) throw new ResponseError("Update asset failed", res.status);
+    return res.json();
+  },
+  async deleteAsset(id: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/assets/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(token)
+    });
+    if (!res.ok) throw new ResponseError("Delete asset failed", res.status);
+    return res.json();
+  },
+
+  // Task Templates
+  async fetchTaskTemplates(token: string | null = activeToken): Promise<any[]> {
+    const res = await fetch(`/api/v1/admin/tasks/templates`, { headers: this.getAuthHeaders(token) });
+    if (!res.ok) throw new ResponseError("Fetch task templates failed", res.status);
+    return res.json();
+  },
+  async fetchTaskTemplate(id: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/tasks/templates/${id}`, { headers: this.getAuthHeaders(token) });
+    if (!res.ok) throw new ResponseError("Fetch task template failed", res.status);
+    return res.json();
+  },
+  async createTaskTemplate(template: any, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/tasks/templates`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(template)
+    });
+    if (!res.ok) throw new ResponseError("Create task template failed", res.status);
+    return res.json();
+  },
+  async updateTaskTemplate(id: string, template: any, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/tasks/templates/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(token),
+      body: JSON.stringify(template)
+    });
+    if (!res.ok) throw new ResponseError("Update task template failed", res.status);
+    return res.json();
+  },
+  async deleteTaskTemplate(id: string, token: string | null = activeToken): Promise<any> {
+    const res = await fetch(`/api/v1/admin/tasks/templates/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(token)
+    });
+    if (!res.ok) throw new ResponseError("Delete task template failed", res.status);
+    return res.json();
   }
 };

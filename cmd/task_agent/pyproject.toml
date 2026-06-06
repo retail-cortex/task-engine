@@ -1,0 +1,20 @@
+[project]
+name = "task_agent"
+version = "0.1.0"
+description = "Gemini Task Engine ADK Agent Service"
+requires-python = ">=3.11"
+dependencies = [
+    "google-adk==1.14.1",
+    "google-genai>=0.1.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "pg8000>=1.30.0",
+    "sqlalchemy>=2.0.0",
+    "asyncpg>=0.29.0",
+    "google-cloud-storage>=2.0.0",
+    "a2a-sdk[http-server]>=0.3.4,<0.4.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

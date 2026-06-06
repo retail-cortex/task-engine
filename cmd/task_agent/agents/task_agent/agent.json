@@ -1,0 +1,26 @@
+{
+  "capabilities": {},
+  "defaultInputModes": [
+    "text/plain"
+  ],
+  "defaultOutputModes": [
+    "application/json"
+  ],
+  "description": "A direct, database-grounded retail operations coordinator capable of managing task queues, executing compliance overrides, performing semantic SOP lookups, and coordinating peer-to-peer task handovers.",
+  "name": "task_agent",
+  "skills": [
+    {
+      "id": "task_coordination",
+      "name": "Task Coordination",
+      "description": "Manage task queues, execute compliance overrides, perform semantic SOP lookups, and coordinate peer task trades",
+      "tags": [
+        "retail",
+        "task-management",
+        "compliance",
+        "coordination"
+      ]
+    }
+  ],
+  "url": "https://example.com/a2a/task_agent",
+  "version": "1.0.0"
+}

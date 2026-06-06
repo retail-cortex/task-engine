@@ -13,7 +13,7 @@
 // limitations under the License.
 
 export interface A2UIComponent {
-  type: 'card' | 'column' | 'row' | 'text' | 'button' | 'table' | 'select' | 'input';
+  type: 'card' | 'column' | 'row' | 'text' | 'button' | 'table' | 'select' | 'input' | 'canvas';
   id?: string;
   title?: string;
   label?: string;
@@ -31,6 +31,11 @@ export interface A2UIComponent {
   placeholder?: string;
   options?: Array<{ label: string; value: string }>;
   value?: string;
+
+  // Custom Canvas parameters
+  layout?: 'linear' | 'boutique' | 'racetrack';
+  beacon?: { x: number; y: number; name?: string };
 }
 
 export type A2UIActionHandler = (actionType: string, actionData: any) => void;
+

@@ -15,12 +15,19 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"strings"
 
+	"github.com/google/uuid"
 	"github.com/gin-gonic/gin"
 	mcp "github.com/metoro-io/mcp-golang"
-	"github.com/metoro-io/mcp-golang/transport/http"
+	mcphttp "github.com/metoro-io/mcp-golang/transport/http"
 	"github.com/rmcguinness/gemini_task_engine/pkg/agents"
 	"github.com/rmcguinness/gemini_task_engine/pkg/model"
 	"github.com/rmcguinness/gemini_task_engine/pkg/service"
@@ -28,7 +35,7 @@ import (
 
 type MCPHandler struct {
 	mcpServer         *mcp.Server
-	ginTransport      *http.GinTransport
+	ginTransport      *mcphttp.GinTransport
 	taskService        service.TaskService
 	ragService         service.RAGService
 	shiftService       service.ShiftService
@@ -36,7 +43,7 @@ type MCPHandler struct {
 }
 
 func NewMCPHandler(taskService service.TaskService, ragService service.RAGService, shiftService service.ShiftService, automationService service.AutomationService) (*MCPHandler, error) {
-	transport := http.NewGinTransport()
+	transport := mcphttp.NewGinTransport()
 	server := mcp.NewServer(
 		transport,
 		mcp.WithName("gemini-task-engine-mcp"),
@@ -60,7 +67,63 @@ func NewMCPHandler(taskService service.TaskService, ragService service.RAGServic
 		return nil, fmt.Errorf("failed to register MCP prompts: %w", err)
 	}
 
+	if err := server.Serve(); err != nil {
+		return nil, fmt.Errorf("failed to serve MCP: %w", err)
+	}
+
 	return handler, nil
+}
+
+type jsonrpcRequest struct {
+	Method string          `json:"method"`
+	ID     json.RawMessage `json:"id"`
+}
+
+type jsonrpcResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *jsonrpcError   `json:"error,omitempty"`
+}
+
+type jsonrpcError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+type toolCallSuccessResult struct {
+	Content []toolContent `json:"content"`
+	IsError bool          `json:"isError"`
+}
+
+type toolContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type interceptingWriter struct {
+	gin.ResponseWriter
+	body   *bytes.Buffer
+	status int
+}
+
+func (w *interceptingWriter) WriteHeader(statusCode int) {
+	w.status = statusCode
+}
+
+func (w *interceptingWriter) Write(b []byte) (int, error) {
+	return w.body.Write(b)
+}
+
+func (w *interceptingWriter) WriteString(s string) (int, error) {
+	return w.body.WriteString(s)
+}
+
+func (w *interceptingWriter) Status() int {
+	if w.status == 0 {
+		return http.StatusOK
+	}
+	return w.status
 }
 
 // Handler returns the Gin handler function to mount on the chat route.
@@ -68,6 +131,9 @@ func (h *MCPHandler) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Retrieve parameters from request path and headers
 		shiftID := c.Param("shiftId")
+		if shiftID == "" {
+			shiftID = c.GetHeader("X-Shift-ID")
+		}
 		userID, _ := c.Get("userID")
 
 		// Inject shift context and user context into standard request context
@@ -76,8 +142,94 @@ func (h *MCPHandler) Handler() gin.HandlerFunc {
 		ctx = context.WithValue(ctx, "userID", userID)
 		c.Request = c.Request.WithContext(ctx)
 
-		// Run the stateless HTTP transport handler
+		// 1. Read request body to inspect the JSON-RPC method
+		var reqBody []byte
+		if c.Request.Body != nil {
+			var err error
+			reqBody, err = io.ReadAll(c.Request.Body)
+			if err == nil {
+				// Restore body so SDK can read it
+				c.Request.Body = io.NopCloser(bytes.NewBuffer(reqBody))
+			}
+		}
+
+		// Parse method from request
+		var method string
+		var rpcReq jsonrpcRequest
+		if len(reqBody) > 0 {
+			if err := json.Unmarshal(reqBody, &rpcReq); err == nil {
+				method = rpcReq.Method
+			}
+		}
+
+		// 2. Intercept response using a custom writer
+		buffer := &bytes.Buffer{}
+		originalWriter := c.Writer
+		interceptWriter := &interceptingWriter{
+			ResponseWriter: originalWriter,
+			body:           buffer,
+		}
+		c.Writer = interceptWriter
+
+		// 3. Call the SDK handler
 		h.ginTransport.Handler()(c)
+
+		// Restore original writer
+		c.Writer = originalWriter
+
+		// 4. Process and potentially modify response
+		respBytes := buffer.Bytes()
+		if len(respBytes) > 0 {
+			var rpcResp jsonrpcResponse
+			if err := json.Unmarshal(respBytes, &rpcResp); err == nil {
+				modified := false
+
+				if method == "initialize" && rpcResp.Result != nil {
+					var initResp struct {
+						Capabilities    map[string]interface{} `json:"capabilities"`
+						Instructions    *string                `json:"instructions,omitempty"`
+						ProtocolVersion string                 `json:"protocolVersion"`
+						ServerInfo      map[string]interface{} `json:"serverInfo"`
+					}
+					if err := json.Unmarshal(rpcResp.Result, &initResp); err == nil {
+						initResp.ProtocolVersion = "2025-11-25"
+						newResultBytes, err := json.Marshal(initResp)
+						if err == nil {
+							rpcResp.Result = newResultBytes
+							modified = true
+						}
+					}
+				} else if method == "tools/call" && rpcResp.Error != nil {
+					// Translate input validation/unmarshaling errors to isError: true result
+					resultVal := toolCallSuccessResult{
+						Content: []toolContent{
+							{
+								Type: "text",
+								Text: rpcResp.Error.Message,
+							},
+						},
+						IsError: true,
+					}
+					if resultBytes, err := json.Marshal(resultVal); err == nil {
+						rpcResp.Result = resultBytes
+						rpcResp.Error = nil
+						modified = true
+					}
+				}
+
+				if modified {
+					if newRespBytes, err := json.Marshal(rpcResp); err == nil {
+						respBytes = newRespBytes
+					}
+				}
+			}
+		}
+
+		// 5. Write final headers and data to the real response writer
+		// GinTransport sets Content-Type to application/json and status code to 200 OK
+		originalWriter.Header().Set("Content-Type", "application/json")
+		originalWriter.WriteHeader(http.StatusOK)
+		_, _ = originalWriter.Write(respBytes)
 	}
 }
 
@@ -89,7 +241,14 @@ type TriggerAlertArgs struct {
 }
 
 type GetTasksArgs struct {
-	SiteID string `json:"site_id" jsonschema:"description=The ID of the site to fetch tasks for"`
+	SiteID     string  `json:"site_id" jsonschema:"description=The ID of the site to fetch tasks for"`
+	RoleID     *string `json:"role_id,omitempty" jsonschema:"description=Optional role ID to filter tasks by required role"`
+	AssigneeID *string `json:"assignee_id,omitempty" jsonschema:"description=Optional user ID to filter tasks by assignee"`
+	LocationID *string `json:"location_id,omitempty" jsonschema:"description=Optional location ID to filter tasks by location"`
+}
+
+type GetSiteLocationsArgs struct {
+	SiteID string `json:"site_id" jsonschema:"description=The GORM UUID site ID to fetch locations for"`
 }
 
 type OverrideAssetArgs struct {
@@ -113,6 +272,28 @@ type AcceptTradeArgs struct {
 
 type RejectTradeArgs struct {
 	TradeID string `json:"trade_id" jsonschema:"description=The GORM UUID ID of the task trade request being rejected"`
+}
+
+type GetUserContextArgs struct{}
+
+type OrgContextInfo struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type SiteContextInfo struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	OrganizationID string `json:"organization_id"`
+}
+
+type UserContextResponse struct {
+	UserID        string            `json:"user_id"`
+	Email         string            `json:"email"`
+	Name          string            `json:"name"`
+	Roles         []string          `json:"roles"`
+	Organizations []OrgContextInfo  `json:"organizations"`
+	Sites         []SiteContextInfo `json:"sites"`
 }
 
 func (h *MCPHandler) registerTools() error {
@@ -154,8 +335,62 @@ func (h *MCPHandler) registerTools() error {
 
 	// Tool 7: reject_trade
 	err = h.mcpServer.RegisterTool("reject_trade", "Rejects a pending task trade proposal under direct coworker maker/checker guidelines.", h.HandleRejectTrade)
+	if err != nil {
+		return err
+	}
+
+	// Tool 8: get_user_context
+	err = h.mcpServer.RegisterTool("get_user_context", "Retrieves the current authenticated user's profile details, roles, assigned organizations, and assigned sites.", h.HandleGetUserContext)
+	if err != nil {
+		return err
+	}
+
+	// Tool 9: claim_task
+	err = h.mcpServer.RegisterTool("claim_task", "Claims/assigns a prioritized task execution from the queue to the authenticated user.", h.HandleClaimTask)
+	if err != nil {
+		return err
+	}
+
+	// Tool 10: update_task_status
+	err = h.mcpServer.RegisterTool("update_task_status", "Updates the execution status (e.g. IN_PROGRESS, COMPLETED) and optional checklist state of a task.", h.HandleUpdateTaskStatus)
+	if err != nil {
+		return err
+	}
+
+	// Tool 11: list_pending_trades
+	err = h.mcpServer.RegisterTool("list_pending_trades", "Lists all active, pending coworker task trade proposals relevant to the authenticated user.", h.HandleListPendingTrades)
+	if err != nil {
+		return err
+	}
+
+	// Tool 12: get_site_locations
+	err = h.mcpServer.RegisterTool("get_site_locations", "Lists all locations (fixtures, registers, aisles) under a physical site.", h.HandleGetSiteLocations)
 	return err
 }
+
+func getUserID(ctx context.Context) string {
+	var uid string
+	if ginCtx, ok := ctx.Value("ginContext").(*gin.Context); ok {
+		if val, exists := ginCtx.Get("userID"); exists {
+			if s, ok := val.(string); ok {
+				uid = s
+			}
+		}
+	}
+	if uid == "" {
+		if s, ok := ctx.Value("userID").(string); ok {
+			uid = s
+		}
+	}
+	if uid != "" {
+		uid = strings.TrimPrefix(uid, "A2A_USER_")
+		if _, err := uuid.Parse(uid); err == nil {
+			return uid
+		}
+	}
+	return "00000000-0000-0000-0000-000000000000"
+}
+
 
 func (h *MCPHandler) HandleGetTasks(ctx context.Context, args GetTasksArgs) (*mcp.ToolResponse, error) {
 	queue, err := h.taskService.GetQueue(ctx, args.SiteID)
@@ -164,21 +399,70 @@ func (h *MCPHandler) HandleGetTasks(ctx context.Context, args GetTasksArgs) (*mc
 	}
 	var output string
 	for _, item := range queue {
-		output += fmt.Sprintf("Task: %s | ID: %s | Priority: %d | Status: %s", item.TaskTemplateID, item.ID, item.Priority, item.Status)
+		// Filter by RoleID
+		if args.RoleID != nil && *args.RoleID != "" {
+			if item.Task.TargetRoleID == nil || *item.Task.TargetRoleID != *args.RoleID {
+				continue
+			}
+		}
+
+		// Filter by AssigneeID
+		if args.AssigneeID != nil && *args.AssigneeID != "" {
+			if item.AssigneeID == nil || *item.AssigneeID != *args.AssigneeID {
+				continue
+			}
+		}
+
+		// Filter by LocationID
+		if args.LocationID != nil && *args.LocationID != "" {
+			loc, err := h.taskService.GetLocationByID(ctx, *args.LocationID)
+			if err != nil || loc == nil {
+				continue
+			}
+			locName := strings.ToLower(loc.Name)
+			taskName := strings.ToLower(item.Task.Name)
+			taskDesc := strings.ToLower(item.Description)
+			matched := false
+			if strings.Contains(taskName, locName) || strings.Contains(taskDesc, locName) {
+				matched = true
+			} else {
+				terms := strings.Fields(locName)
+				for _, term := range terms {
+					if len(term) <= 2 || term == "volt" || term == "vine" || term == "omnimart" {
+						continue
+					}
+					if strings.Contains(taskName, term) || strings.Contains(taskDesc, term) {
+						matched = true
+						break
+					}
+				}
+			}
+			if !matched {
+				continue
+			}
+		}
+
+		output += fmt.Sprintf("Task Name: %s | Template ID: %s | Task ID: %s | Priority: %d | Status: %s", item.Task.Name, item.TaskTemplateID, item.ID, item.Priority, item.Status)
+		if item.Task.TargetRoleID != nil {
+			output += fmt.Sprintf(" | Target Role ID: %s", *item.Task.TargetRoleID)
+		}
+		if item.AssigneeID != nil {
+			output += fmt.Sprintf(" | Assignee ID: %s", *item.AssigneeID)
+		}
 		if item.Description != "" {
 			output += fmt.Sprintf(" | Description: %s", item.Description)
 		}
 		output += "\n"
 	}
 	if output == "" {
-		output = "No active tasks in queue for site."
+		output = "No active tasks in queue for site matching the filters."
 	}
 	return mcp.NewToolResponse(mcp.NewTextContent(output)), nil
 }
 
 func (h *MCPHandler) HandleOverrideAsset(ctx context.Context, args OverrideAssetArgs) (*mcp.ToolResponse, error) {
-	userID, ok := ctx.Value("userID").(string)
-	if !ok || userID == "" {
+	userID := getUserID(ctx)
+	if userID == "" {
 		userID = "00000000-0000-0000-0000-000000000000"
 	}
 	err := h.taskService.OverrideAssetConstraint(ctx, args.ExecutionID, args.AssetID, args.Justification, userID)
@@ -189,8 +473,8 @@ func (h *MCPHandler) HandleOverrideAsset(ctx context.Context, args OverrideAsset
 }
 
 func (h *MCPHandler) HandleProposeTrade(ctx context.Context, args ProposeTradeArgs) (*mcp.ToolResponse, error) {
-	userID, ok := ctx.Value("userID").(string)
-	if !ok || userID == "" {
+	userID := getUserID(ctx)
+	if userID == "" {
 		userID = "00000000-0000-0000-0000-000000000000"
 	}
 	err := h.taskService.ProposeTrade(ctx, args.TaskExecutionID, args.ProposedAssigneeID, userID)
@@ -201,8 +485,8 @@ func (h *MCPHandler) HandleProposeTrade(ctx context.Context, args ProposeTradeAr
 }
 
 func (h *MCPHandler) HandleAcceptTrade(ctx context.Context, args AcceptTradeArgs) (*mcp.ToolResponse, error) {
-	userID, ok := ctx.Value("userID").(string)
-	if !ok || userID == "" {
+	userID := getUserID(ctx)
+	if userID == "" {
 		userID = "00000000-0000-0000-0000-000000000000"
 	}
 	err := h.taskService.AcceptTrade(ctx, args.TradeID, userID)
@@ -213,8 +497,8 @@ func (h *MCPHandler) HandleAcceptTrade(ctx context.Context, args AcceptTradeArgs
 }
 
 func (h *MCPHandler) HandleRejectTrade(ctx context.Context, args RejectTradeArgs) (*mcp.ToolResponse, error) {
-	userID, ok := ctx.Value("userID").(string)
-	if !ok || userID == "" {
+	userID := getUserID(ctx)
+	if userID == "" {
 		userID = "00000000-0000-0000-0000-000000000000"
 	}
 	err := h.taskService.RejectTrade(ctx, args.TradeID, userID)
@@ -247,6 +531,171 @@ func (h *MCPHandler) HandleTriggerAlert(ctx context.Context, args TriggerAlertAr
 		return nil, err
 	}
 	output := fmt.Sprintf("Streaming alert successfully ingested. Created dynamic task execution ticket: ID: %s | Priority: %d | Status: %s\n", exec.ID, exec.Priority, exec.Status)
+	return mcp.NewToolResponse(mcp.NewTextContent(output)), nil
+}
+
+func (h *MCPHandler) HandleGetUserContext(ctx context.Context, args GetUserContextArgs) (*mcp.ToolResponse, error) {
+	userID := getUserID(ctx)
+	if userID == "" || userID == "00000000-0000-0000-0000-000000000000" {
+		return nil, fmt.Errorf("user context not initialized")
+	}
+
+	user, err := h.shiftService.GetUserProfile(ctx, userID)
+	if err != nil {
+		if strings.Contains(err.Error(), "record not found") {
+			log.Printf("[MCP] Dynamic user ID %s not found in DB. Falling back to default supervisor profile b75c1a02-c884-40ed-a3f8-8b95f3ff7539", userID)
+			userID = "b75c1a02-c884-40ed-a3f8-8b95f3ff7539"
+			user, err = h.shiftService.GetUserProfile(ctx, userID)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch user profile: %w", err)
+		}
+	}
+
+	var roles []string
+	isAdmin := false
+	for _, r := range user.Roles {
+		roles = append(roles, r.Name)
+		if r.Name == "ADMIN" {
+			isAdmin = true
+		}
+	}
+
+	var orgs []OrgContextInfo
+	for _, o := range user.Organizations {
+		orgs = append(orgs, OrgContextInfo{
+			ID:   o.ID,
+			Name: o.Name,
+		})
+	}
+
+	var sites []SiteContextInfo
+	if isAdmin {
+		activeSites, err := h.taskService.ListActiveSites(ctx)
+		if err == nil {
+			for _, s := range activeSites {
+				sites = append(sites, SiteContextInfo{
+					ID:             s.ID,
+					Name:           s.Name,
+					OrganizationID: s.OrganizationID,
+				})
+			}
+		}
+	}
+	if len(sites) == 0 {
+		for _, s := range user.Sites {
+			sites = append(sites, SiteContextInfo{
+				ID:             s.ID,
+				Name:           s.Name,
+				OrganizationID: s.OrganizationID,
+			})
+		}
+	}
+
+	resp := UserContextResponse{
+		UserID:        user.ID,
+		Email:         user.Email,
+		Name:          user.Name,
+		Roles:         roles,
+		Organizations: orgs,
+		Sites:         sites,
+	}
+
+	respBytes, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal user context: %w", err)
+	}
+
+	return mcp.NewToolResponse(mcp.NewTextContent(string(respBytes))), nil
+}
+
+type ClaimTaskArgs struct {
+	ExecutionID string `json:"execution_id" jsonschema:"description=The GORM UUID of the task execution being claimed"`
+}
+
+func (h *MCPHandler) HandleClaimTask(ctx context.Context, args ClaimTaskArgs) (*mcp.ToolResponse, error) {
+	userID := getUserID(ctx)
+	if userID == "" || userID == "00000000-0000-0000-0000-000000000000" {
+		return nil, fmt.Errorf("user context not initialized")
+	}
+
+	user, err := h.shiftService.GetUserProfile(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve user profile: %w", err)
+	}
+
+	var roleIDs []string
+	for _, r := range user.Roles {
+		roleIDs = append(roleIDs, r.ID)
+	}
+
+	err = h.taskService.ClaimTask(ctx, args.ExecutionID, userID, roleIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	return mcp.NewToolResponse(mcp.NewTextContent("Task successfully claimed and assigned.")), nil
+}
+
+type UpdateTaskStatusArgs struct {
+	ExecutionID    string `json:"execution_id" jsonschema:"description=The GORM UUID of the task execution being updated"`
+	Status         string `json:"status" jsonschema:"description=The new status of the task execution (e.g. IN_PROGRESS, COMPLETED)"`
+	ChecklistState string `json:"checklist_state,omitempty" jsonschema:"description=Optional JSON string representing the updated checklist items state"`
+}
+
+func (h *MCPHandler) HandleUpdateTaskStatus(ctx context.Context, args UpdateTaskStatusArgs) (*mcp.ToolResponse, error) {
+	userID := getUserID(ctx)
+	if userID == "" || userID == "00000000-0000-0000-0000-000000000000" {
+		return nil, fmt.Errorf("user context not initialized")
+	}
+
+	err := h.taskService.UpdateStatus(ctx, args.ExecutionID, args.Status, args.ChecklistState, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return mcp.NewToolResponse(mcp.NewTextContent("Task status successfully updated.")), nil
+}
+
+type ListPendingTradesArgs struct{}
+
+func (h *MCPHandler) HandleListPendingTrades(ctx context.Context, args ListPendingTradesArgs) (*mcp.ToolResponse, error) {
+	userID := getUserID(ctx)
+	if userID == "" || userID == "00000000-0000-0000-0000-000000000000" {
+		return nil, fmt.Errorf("user context not initialized")
+	}
+
+	trades, err := h.taskService.ListPendingTrades(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	respBytes, err := json.MarshalIndent(trades, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal pending trades: %w", err)
+	}
+
+	return mcp.NewToolResponse(mcp.NewTextContent(string(respBytes))), nil
+}
+
+func (h *MCPHandler) HandleGetSiteLocations(ctx context.Context, args GetSiteLocationsArgs) (*mcp.ToolResponse, error) {
+	userID := getUserID(ctx)
+	if userID == "" || userID == "00000000-0000-0000-0000-000000000000" {
+		return nil, fmt.Errorf("user context not initialized")
+	}
+
+	locations, err := h.taskService.GetSiteLocations(ctx, args.SiteID)
+	if err != nil {
+		return nil, err
+	}
+
+	var output string
+	for _, l := range locations {
+		output += fmt.Sprintf("Location Name: %s | ID: %s | Type: %s | Function: %s\n", l.Name, l.ID, l.LocationType, l.LocationFunctionType)
+	}
+	if output == "" {
+		output = "No locations configured for site."
+	}
 	return mcp.NewToolResponse(mcp.NewTextContent(output)), nil
 }
 

@@ -15,7 +15,9 @@
 package api
 
 import (
+	_ "embed"
 	"fmt"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rmcguinness/gemini_task_engine/pkg/agents"
@@ -23,9 +25,19 @@ import (
 	"gorm.io/gorm"
 )
 
+//go:embed openapi.json
+var openapiJSON []byte
+
+//go:embed swagger.html
+var swaggerHTML []byte
+
 type OAuthConfig struct {
 	ClientID string `toml:"client_id"`
 	Secret   string `toml:"secret"`
+}
+
+type IAPConfig struct {
+	Audience string `toml:"audience"`
 }
 
 // Config holds the server binding configuration.
@@ -33,6 +45,7 @@ type Config struct {
 	Port    string      `toml:"port"`
 	Address string      `toml:"address"`
 	OAuth   OAuthConfig `toml:"oauth"`
+	IAP     IAPConfig   `toml:"iap"`
 }
 
 // Server defines the GIN web server and routing engine.
@@ -84,8 +97,12 @@ func NewServer(
 		agentsSessionService = agents.NewInMemorySessionService()
 	}
 
+	var activeDB *gorm.DB
+	if len(db) > 0 {
+		activeDB = db[0]
+	}
 	adminHandler := NewAdminHandler(adminService, schedulerService)
-	operationalHandler := NewOperationalHandler(taskService, shiftService, automationService, cfg)
+	operationalHandler := NewOperationalHandler(taskService, shiftService, automationService, cfg, activeDB)
 	mcpHandler, err := NewMCPHandler(taskService, ragService, shiftService, automationService)
 	if err != nil {
 		return nil, err
@@ -113,22 +130,76 @@ func NewServer(
 }
 
 func (s *Server) setupRoutes() {
-	// Health endpoint
+	// Swagger documentation endpoints
+	s.engine.GET("/swagger", func(c *gin.Context) {
+		c.Data(http.StatusOK, "text/html; charset=utf-8", swaggerHTML)
+	})
+	s.engine.GET("/swagger/openapi.json", func(c *gin.Context) {
+		c.Data(http.StatusOK, "application/json; charset=utf-8", openapiJSON)
+	})
+
+	// Health and probe endpoints
 	s.engine.GET("/health/readiness", s.operationalHandler.Readiness)
+	s.engine.GET("/liveness", s.operationalHandler.Liveness)
+	s.engine.GET("/startup", s.operationalHandler.Startup)
+
+	// Global static/parameterless MCP endpoint (for standard client discovery)
+	s.engine.POST("/api/v1/mcp", UserContextMiddleware(s.adminService, s.cfg), s.MCPHandler.Handler())
+	s.engine.GET("/api/v1/mcp", UserContextMiddleware(s.adminService, s.cfg), s.MCPHandler.Handler())
 
 	// Admin endpoints
-	admin := s.engine.Group("/api/v1/admin", UserContextMiddleware(s.adminService, s.cfg.OAuth.ClientID))
+	admin := s.engine.Group("/api/v1/admin", UserContextMiddleware(s.adminService, s.cfg))
 	{
+		// Users
 		admin.GET("/users", s.adminHandler.ListUsers)
-		admin.POST("/roles", s.adminHandler.CreateRole)
+		admin.GET("/users/:id", s.adminHandler.GetUser)
+		admin.POST("/users", s.adminHandler.CreateUser)
+		admin.PUT("/users/:id", s.adminHandler.UpdateUser)
+		admin.DELETE("/users/:id", s.adminHandler.DeleteUser)
 		admin.PUT("/users/:id/roles", s.adminHandler.AssignRole)
+
+		// Roles
+		admin.POST("/roles", s.adminHandler.CreateRole)
+		admin.GET("/roles/:id", s.adminHandler.GetRole)
+		admin.PUT("/roles/:id", s.adminHandler.UpdateRole)
+		admin.DELETE("/roles/:id", s.adminHandler.DeleteRole)
+		admin.GET("/roles", s.adminHandler.ListRoles)
+
+		// Organizations
 		admin.POST("/organizations", s.adminHandler.CreateOrganization)
+		admin.GET("/organizations/:id", s.adminHandler.GetOrganization)
+		admin.PUT("/organizations/:id", s.adminHandler.UpdateOrganization)
+		admin.DELETE("/organizations/:id", s.adminHandler.DeleteOrganization)
 		admin.GET("/organizations", s.adminHandler.ListOrganizations)
-		admin.PUT("/organizations/:orgId/users/:userId", s.adminHandler.AssignUserToOrganization)
-		admin.POST("/organizations/:orgId/sites", s.adminHandler.CreateSite)
-		admin.POST("/organizations/:orgId/sites/:siteId/locations", s.adminHandler.CreateLocation)
-		admin.POST("/organizations/:orgId/sites/:siteId/locations/:locationId/assets", s.adminHandler.CreateAsset)
+		admin.PUT("/organizations/:id/users/:userId", s.adminHandler.AssignUserToOrganization)
+
+		// Sites
+		admin.POST("/organizations/:id/sites", s.adminHandler.CreateSite)
+		admin.GET("/sites/:id", s.adminHandler.GetSite)
+		admin.PUT("/sites/:id", s.adminHandler.UpdateSite)
+		admin.DELETE("/sites/:id", s.adminHandler.DeleteSite)
+		admin.GET("/sites", s.adminHandler.ListSites)
+
+		// Locations
+		admin.POST("/organizations/:id/sites/:siteId/locations", s.adminHandler.CreateLocation)
+		admin.GET("/locations/:id", s.adminHandler.GetLocation)
+		admin.PUT("/locations/:id", s.adminHandler.UpdateLocation)
+		admin.DELETE("/locations/:id", s.adminHandler.DeleteLocation)
+		admin.GET("/locations", s.adminHandler.ListLocations)
+
+		// Assets
+		admin.POST("/organizations/:id/sites/:siteId/locations/:locationId/assets", s.adminHandler.CreateAsset)
+		admin.GET("/assets/:id", s.adminHandler.GetAsset)
+		admin.PUT("/assets/:id", s.adminHandler.UpdateAsset)
+		admin.DELETE("/assets/:id", s.adminHandler.DeleteAsset)
+		admin.GET("/assets", s.adminHandler.ListAssets)
+
+		// Tasks
 		admin.POST("/tasks/templates", s.adminHandler.CreateTaskTemplate)
+		admin.GET("/tasks/templates/:id", s.adminHandler.GetTaskTemplate)
+		admin.PUT("/tasks/templates/:id", s.adminHandler.UpdateTaskTemplate)
+		admin.DELETE("/tasks/templates/:id", s.adminHandler.DeleteTaskTemplate)
+		admin.GET("/tasks/templates", s.adminHandler.ListTaskTemplates)
 
 		// Background Job Scheduler Controls
 		admin.POST("/scheduler/trigger", s.adminHandler.TriggerSchedulerSweep)
@@ -136,7 +207,7 @@ func (s *Server) setupRoutes() {
 	}
 
 	// Operational endpoints grouped by organization context
-	orgs := s.engine.Group("/api/v1/organizations/:orgId", UserContextMiddleware(s.adminService, s.cfg.OAuth.ClientID))
+	orgs := s.engine.Group("/api/v1/organizations/:orgId", UserContextMiddleware(s.adminService, s.cfg))
 	{
 		// Active ProfileContext (me)
 		orgs.GET("/me", s.operationalHandler.GetMe)
@@ -169,6 +240,7 @@ func (s *Server) setupRoutes() {
 
 		// Interactive MCP chat session
 		orgs.POST("/sites/:siteId/users/:userId/sessions/shift/:shiftId/chat", s.MCPHandler.Handler())
+		orgs.GET("/sites/:siteId/users/:userId/sessions/shift/:shiftId/chat", s.MCPHandler.Handler())
 
 		// Conversational agent orchestrator chat endpoint
 		orgs.POST("/sites/:siteId/users/:userId/sessions/shift/:shiftId/message", s.chatHandler.SendMessage)

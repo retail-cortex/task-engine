@@ -3,14 +3,15 @@ FROM gcr.io/distroless/static-debian12:latest
 # Set working directory
 WORKDIR /
 
-# Copy the statically compiled Linux binary from Bazel output
-COPY bazel-bin/cmd/server/server_/server /server
+# Copy the statically compiled Linux binary from build context
+COPY server_bin /server
 
 # Copy environment configuration files
 COPY .env.toml /
 COPY .env.dev.toml /
 
 # Expose API port
+ENV MODENV_RUNTIME=dev
 EXPOSE 8080
 
 # Execute server

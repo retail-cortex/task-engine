@@ -22,6 +22,7 @@ import Button from './Button';
 import Text from './Text';
 import Input from './Input';
 import Select from './Select';
+import Canvas from './Canvas';
 
 interface A2UIRendererProps {
   component: A2UIComponent;
@@ -97,6 +98,8 @@ const A2UIRenderer: React.FC<A2UIRendererProps> = ({ component, onActionTrigger 
             }}
           />
         );
+      case 'canvas':
+        return <Canvas key={child.id || `canvas-${idx}`} node={child} />;
       default:
         return null;
     }

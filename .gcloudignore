@@ -1,0 +1,40 @@
+# Ignore Git metadata
+.git
+.github
+
+# Ignore Bazel symlinks and metadata
+bazel-*
+.ijwb
+.bazelignore.user
+.bazel-deploy-cache/
+
+# Ignore Go build artifacts
+*.o
+*.a
+*.so
+*.exe
+*.test
+*.prof
+/dist/
+bin/
+
+# Ignore Node/React build files and cache
+node_modules/
+.next/
+dist/
+build/
+.npm
+.eslintcache
+.parcel-cache
+.cache/
+.pnpm-debug.log*
+
+# Ignore Terraform files (keep secrets out of builds)
+*passwords_registry.csv
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.log
+tf.log
+scratch/

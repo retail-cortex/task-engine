@@ -1,3 +1,5 @@
 node_modules
 scratch
-
+.bazel-deploy-cache
+.bazelbsp
+.venv

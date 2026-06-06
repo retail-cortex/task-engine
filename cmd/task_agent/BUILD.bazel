@@ -1,0 +1,71 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+
+package(default_visibility = ["//visibility:public"])
+
+py_library(
+    name = "config",
+    srcs = ["config.py"],
+)
+
+py_library(
+    name = "agents_lib",
+    srcs = [
+        "agents/task_agent/__init__.py",
+        "agents/task_agent/task_agent.py",
+        "a2ui_transpiler.py",
+    ],
+    data = ["agents/task_agent/agent.json"],
+    deps = [":config"],
+)
+
+py_binary(
+    name = "agent",
+    srcs = ["main.py"],
+    main = "main.py",
+    imports = ["."], # Support local directory imports
+    deps = [
+        ":config",
+        ":agents_lib",
+    ],
+)
+
+py_test(
+    name = "test_config",
+    srcs = ["tests/test_config.py"],
+    imports = ["."], # Support local directory imports
+    deps = [
+        ":config",
+    ],
+)
+
+py_test(
+    name = "test_agent",
+    srcs = ["tests/test_agent.py"],
+    imports = ["."], # Support local directory imports
+    deps = [
+        ":agents_lib",
+    ],
+)
+
+py_test(
+    name = "test_a2ui_transpiler",
+    srcs = ["tests/test_a2ui_transpiler.py"],
+    imports = ["."], # Support local directory imports
+    deps = [
+        ":agents_lib",
+    ],
+)
+
+sh_binary(
+    name = "dev",
+    srcs = ["run_agent.sh"],
+    data = [
+        "main.py",
+        "config.py",
+        ":agents_lib",
+        ".env.toml",
+        ".env.local.toml",
+        ".env.dev.toml",
+    ],
+)
+

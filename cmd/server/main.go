@@ -52,12 +52,17 @@ func main() {
 	}
 
 	log.Printf("Initializing AlloyDB/PostgreSQL connection...")
-	db, err := persistence.InitDB(appConfig.Persistence)
-	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+	db, dbErr := persistence.InitDB(appConfig.Persistence)
+	if dbErr != nil {
+		log.Printf("WARNING: Database connectivity failed: %v. Bootstrapping server in degraded offline mode.", dbErr)
+		var errInit error
+		db, errInit = persistence.NewOfflineDB(dbErr)
+		if errInit != nil {
+			log.Fatalf("Failed to initialize offline fallback database: %v", errInit)
+		}
+	} else {
+		log.Printf("Database successfully connected. Setting up GORM repositories...")
 	}
-
-	log.Printf("Database successfully connected. Setting up GORM repositories...")
 	userRepo := persistence.NewUserRepository(db)
 	orgRepo := persistence.NewOrganizationRepository(db)
 	siteRepo := persistence.NewSiteRepository(db)
