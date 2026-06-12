@@ -104,6 +104,7 @@ def normalize_card_to_a2ui_messages(flat_card: Dict[str, Any], surface_id: str =
             
             title = node.get("title")
             if title:
+                properties["title"] = str(title)
                 title_id = next_id("text")
                 components[title_id] = {
                     "id": title_id,
@@ -218,7 +219,8 @@ def normalize_card_to_a2ui_messages(flat_card: Dict[str, Any], surface_id: str =
                 "component": {
                     "Button": {
                         "action": action_properties,
-                        "child": label_id
+                        "child": label_id,
+                        "label": str(label_text)
                     }
                 }
             }
@@ -305,6 +307,34 @@ def normalize_card_to_a2ui_messages(flat_card: Dict[str, Any], surface_id: str =
             }
             return comp_id
 
+        elif node_type == "checkbox":
+            comp_id = next_id("checkbox")
+            label_text = node.get("label", "")
+            val = node.get("value", False)
+            
+            label_bound = {"literalString": str(label_text)}
+            
+            value_bound = {}
+            if isinstance(val, bool):
+                value_bound["literalBoolean"] = val
+            elif isinstance(val, str) and val.startswith("/"):
+                value_bound["path"] = val
+            elif isinstance(val, str):
+                value_bound["literalString"] = val
+            else:
+                value_bound["literalBoolean"] = bool(val)
+                
+            components[comp_id] = {
+                "id": comp_id,
+                "component": {
+                    "CheckBox": {
+                        "label": label_bound,
+                        "value": value_bound
+                    }
+                }
+            }
+            return comp_id
+
         elif node_type == "canvas":
             comp_id = next_id("image")
             
@@ -356,10 +386,45 @@ def normalize_card_to_a2ui_messages(flat_card: Dict[str, Any], surface_id: str =
 
 original_event_converter = ec.convert_event_to_a2a_message
 original_part_converter = pc.convert_genai_part_to_a2a_part
+original_convert_a2a_part_to_genai_part = pc.convert_a2a_part_to_genai_part
 
 def custom_convert_genai_part_to_a2a_part(part: genai_types.Part) -> Optional[a2a_types.Part]:
     # Pass through standard conversion unless intercepted by event converter
     return original_part_converter(part)
+
+def custom_convert_a2a_part_to_genai_part(a2a_part: a2a_types.Part) -> Optional[genai_types.Part]:
+    part = a2a_part.root
+    if isinstance(part, a2a_types.DataPart):
+        # Check if this is an incoming A2UI button click / userInteraction event
+        data = part.data
+        if isinstance(data, dict):
+            interaction = data.get("userInteraction", data)
+            action = interaction.get("action", {})
+            action_name = action.get("name")
+            if action_name:
+                # Extract the key-value context parameters of the button click
+                context_params = {}
+                for item in action.get("context", []):
+                    key = item.get("key")
+                    val_obj = item.get("value", {})
+                    # Resolve string, number, or boolean literal values
+                    val = val_obj.get("literalString", val_obj.get("literalNumber", val_obj.get("literalBoolean")))
+                    if key:
+                        context_params[key] = val
+                
+                # Format a crystal-clear, structured command that the Gemini model can reason about
+                param_str = ", ".join(f'{k}="{v}"' for k, v in context_params.items())
+                command = f'User clicked A2UI button action: "{action_name}" with parameters: {param_str}'
+                print(f"[A2UI Monkeypatch] Transpiled incoming A2UI action event: {command}")
+                return genai_types.Part(text=command)
+
+    # Fallback to the original ADK part converter
+    return original_convert_a2a_part_to_genai_part(a2a_part)
+import google.adk.a2a.converters.event_converter as ec
+
+# Global memory cache for pre-synthesized Go-native A2UI Cards to prevent LLM text corruption
+CACHED_A2UI_CARD = None
+
 
 def custom_convert_event_to_a2a_message(
     event,
@@ -383,7 +448,36 @@ def custom_convert_event_to_a2a_message(
                 json_str = None
                 text_prefix = ""
                 
-                if json_match:
+                # Check for cached card token to bypass LLM parsing
+                cache_tokens = [
+                    "[A2UI_CARD_TASK_LIST_CACHED]",
+                    "[A2UI_CARD_LOCATIONS_CACHED]",
+                    "[A2UI_CARD_TASK_DETAILS_CACHED]",
+                    "[A2UI_CARD_WEATHER_CACHED]",
+                    "[A2UI_CARD_STORE_SELECTOR_CACHED]"
+                ]
+                has_token = any(t in text for t in cache_tokens)
+                if has_token:
+                    import builtins
+                    cached_card = getattr(builtins, "CACHED_A2UI_CARD", None)
+                    if cached_card:
+                        print("[A2UI Monkeypatch] Found cached card token. Retrieving cached JSON card from builtins...")
+                        json_str = cached_card
+                        
+                        # Strip markdown code fences if present in cached_card to prevent json.loads failure
+                        json_match_cached = re.search(r'```(?:json)?\s*(.*?)\s*```', json_str, re.DOTALL | re.IGNORECASE)
+                        if json_match_cached:
+                            json_str = json_match_cached.group(1).strip()
+                        else:
+                            json_str = json_str.strip()
+
+                        token = next(t for t in cache_tokens if t in text)
+                        idx = text.find(token)
+                        text_prefix = text[:idx].strip()
+                    else:
+                        print("[A2UI Monkeypatch] Error: Cached token found but builtins.CACHED_A2UI_CARD is None!")
+
+                elif json_match:
                     json_str = json_match.group(1).strip()
                     text_prefix = text[:json_match.start()].strip()
                 else:
@@ -394,29 +488,48 @@ def custom_convert_event_to_a2a_message(
                 if json_str:
                     try:
                         card_data = json.loads(json_str)
-                        if isinstance(card_data, dict) and card_data.get("type") == "card":
-                            is_card = True
-                            print(f"[A2UI Monkeypatch] Intercepted A2UI Card in custom event converter!")
-                            if text_prefix:
-                                clean_prefix = re.sub(r'[\r\n]+', ' ', text_prefix).strip()
-                                if clean_prefix:
-                                    children = card_data.get("children", [])
-                                    children.insert(0, {
-                                        "type": "text",
-                                        "content": clean_prefix,
-                                        "style": "secondary"
-                                    })
-                                    card_data["children"] = children
+                        if isinstance(card_data, dict):
+                            # Check if this is a pre-synthesized Go-native flat A2UI transaction
+                            if "surfaceUpdate" in card_data and "beginRendering" in card_data:
+                                is_card = True
+                                print("[A2UI Monkeypatch] Intercepted pre-synthesized Go-native flat A2UI transaction!")
+                                a2ui_messages = []
+                                if "surfaceUpdate" in card_data:
+                                    a2ui_messages.append({"surfaceUpdate": card_data["surfaceUpdate"]})
+                                if "dataModelUpdate" in card_data:
+                                    a2ui_messages.append({"dataModelUpdate": card_data["dataModelUpdate"]})
+                                if "beginRendering" in card_data:
+                                    a2ui_messages.append({"beginRendering": card_data["beginRendering"]})
                                     
-                            # In A2UI v0.8, the messages list contains beginRendering and surfaceUpdate messages.
-                            # Standard A2A encoding requires sending each A2UI message as a separate DataPart.
-                            a2ui_messages = normalize_card_to_a2ui_messages(card_data)
-                            for msg in a2ui_messages:
-                                data_part = a2a_types.DataPart(
-                                    data=msg,
-                                    metadata={"mimeType": "application/json+a2ui"}
-                                )
-                                a2a_parts.append(a2a_types.Part(root=data_part))
+                                for msg in a2ui_messages:
+                                    data_part = a2a_types.DataPart(
+                                        data=msg,
+                                        metadata={"mimeType": "application/json+a2ui"}
+                                    )
+                                    a2a_parts.append(a2a_types.Part(root=data_part))
+
+                            # Fallback to legacy nested card transpilation
+                            elif card_data.get("type") == "card":
+                                is_card = True
+                                print(f"[A2UI Monkeypatch] Intercepted A2UI Card in custom event converter!")
+                                if text_prefix:
+                                    clean_prefix = re.sub(r'[\r\n]+', ' ', text_prefix).strip()
+                                    if clean_prefix:
+                                        children = card_data.get("children", [])
+                                        children.insert(0, {
+                                            "type": "text",
+                                            "content": clean_prefix,
+                                            "style": "secondary"
+                                        })
+                                        card_data["children"] = children
+                                        
+                                a2ui_messages = normalize_card_to_a2ui_messages(card_data)
+                                for msg in a2ui_messages:
+                                    data_part = a2a_types.DataPart(
+                                        data=msg,
+                                        metadata={"mimeType": "application/json+a2ui"}
+                                    )
+                                    a2a_parts.append(a2a_types.Part(root=data_part))
                     except Exception as e:
                         print(f"[A2UI Monkeypatch] Failed parsing JSON card structure: {e}")
                         
@@ -436,4 +549,5 @@ def custom_convert_event_to_a2a_message(
 
 def register_monkeypatch():
     pc.convert_genai_part_to_a2a_part = custom_convert_genai_part_to_a2a_part
+    pc.convert_a2a_part_to_genai_part = custom_convert_a2a_part_to_genai_part
     ec.convert_event_to_a2a_message = custom_convert_event_to_a2a_message

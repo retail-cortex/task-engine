@@ -17,6 +17,136 @@ import { resolveChecklist, normalizeTask, decodeOAuthTokenClaims } from '../lib/
 
 export { resolveChecklist, normalizeTask, decodeOAuthTokenClaims };
 
+// --- DTO Normalisation Helpers ---
+
+export const normalizeRole = (r: any): any => {
+  if (!r) return r;
+  const id = r.id || r.ID || '';
+  const name = r.name || r.Name || '';
+  const description = r.description || r.Description || '';
+  return {
+    ...r,
+    id, ID: id,
+    name, Name: name,
+    description, Description: description
+  };
+};
+
+export const normalizeSite = (s: any): any => {
+  if (!s) return s;
+  const id = s.id || s.ID || '';
+  const name = s.name || s.Name || '';
+  const organizationId = s.organization_id || s.OrganizationID || '';
+  return {
+    ...s,
+    id, ID: id,
+    name, Name: name,
+    organization_id: organizationId, OrganizationID: organizationId
+  };
+};
+
+export const normalizeOrganization = (o: any): any => {
+  if (!o) return o;
+  const id = o.id || o.ID || '';
+  const name = o.name || o.Name || '';
+  return {
+    ...o,
+    id, ID: id,
+    name, Name: name
+  };
+};
+
+export const normalizeUser = (u: any): any => {
+  if (!u) return u;
+  const id = u.id || u.ID || '';
+  const name = u.name || u.Name || '';
+  const email = u.email || u.Email || '';
+  const oAuthProvider = u.oauth_provider || u.OAuthProvider || '';
+  const oAuthID = u.oauth_id || u.OAuthID || '';
+  const roles = Array.isArray(u.roles) ? u.roles.map(normalizeRole) : (Array.isArray(u.Roles) ? u.Roles.map(normalizeRole) : []);
+  const sites = Array.isArray(u.sites) ? u.sites.map(normalizeSite) : (Array.isArray(u.Sites) ? u.Sites.map(normalizeSite) : []);
+  const organizations = Array.isArray(u.organizations) ? u.organizations.map(normalizeOrganization) : (Array.isArray(u.Organizations) ? u.Organizations.map(normalizeOrganization) : []);
+  
+  return {
+    ...u,
+    id, ID: id,
+    name, Name: name,
+    email, Email: email,
+    oauth_provider: oAuthProvider, OAuthProvider: oAuthProvider,
+    oauth_id: oAuthID, OAuthID: oAuthID,
+    roles, Roles: roles,
+    sites, Sites: sites,
+    organizations, Organizations: organizations
+  };
+};
+
+export const normalizeLocation = (l: any): any => {
+  if (!l) return l;
+  const id = l.id || l.ID || '';
+  const name = l.name || l.Name || '';
+  const siteId = l.site_id || l.SiteID || '';
+  const locationType = l.location_type || l.LocationType || '';
+  const parentId = l.parent_id || l.ParentID || null;
+  const mapCoordinates = l.map_coordinates || l.MapCoordinates || '';
+  const subLocations = Array.isArray(l.sub_locations) ? l.sub_locations.map(normalizeLocation) : (Array.isArray(l.SubLocations) ? l.SubLocations.map(normalizeLocation) : []);
+
+  return {
+    ...l,
+    id, ID: id,
+    name, Name: name,
+    site_id: siteId, SiteID: siteId,
+    location_type: locationType, LocationType: locationType,
+    parent_id: parentId, ParentID: parentId,
+    map_coordinates: mapCoordinates, MapCoordinates: mapCoordinates,
+    sub_locations: subLocations, SubLocations: subLocations
+  };
+};
+
+export const normalizeAsset = (a: any): any => {
+  if (!a) return a;
+  const id = a.id || a.ID || '';
+  const name = a.name || a.Name || '';
+  const siteId = a.site_id || a.SiteID || '';
+  const locationId = a.location_id || a.LocationID || '';
+  const assetType = a.asset_type || a.AssetType || '';
+  const status = a.status || a.Status || '';
+  return {
+    ...a,
+    id, ID: id,
+    name, Name: name,
+    site_id: siteId, SiteID: siteId,
+    location_id: locationId, LocationID: locationId,
+    asset_type: assetType, AssetType: assetType,
+    status, Status: status
+  };
+};
+
+export const normalizeTaskTemplate = (t: any): any => {
+  if (!t) return t;
+  const id = t.id || t.ID || '';
+  const name = t.name || t.Name || '';
+  const description = t.description || t.Description || '';
+  const taskType = t.task_type || t.TaskType || 'STANDARD';
+  const priority = t.priority !== undefined ? t.priority : (t.Priority !== undefined ? t.Priority : 3);
+  const checklistTemplate = t.checklist_template || t.ChecklistTemplate || '';
+  const durationMinutes = t.duration_minutes !== undefined ? t.duration_minutes : (t.DurationMinutes !== undefined ? t.DurationMinutes : 0);
+  const organizationId = t.organization_id || t.OrganizationID || '';
+  const roleId = t.role_id || t.RoleID || '';
+
+  return {
+    ...t,
+    id, ID: id,
+    name, Name: name,
+    description, Description: description,
+    task_type: taskType, TaskType: taskType,
+    priority, Priority: priority,
+    checklist_template: checklistTemplate, ChecklistTemplate: checklistTemplate,
+    duration_minutes: durationMinutes, DurationMinutes: durationMinutes,
+    organization_id: organizationId, OrganizationID: organizationId,
+    role_id: roleId, RoleID: roleId
+  };
+};
+
 // Custom Response Error mapping the HTTP status code (enables dynamic client auth interceptors!)
 export class ResponseError extends Error {
   status: number;
@@ -52,7 +182,7 @@ export const SHIFT_SESSION_ID = '11111111-1111-1111-1111-111111111111';
 // Stateful Session Context inside ApiClient
 let activeToken: string | null = null;
 let activeSiteId: string = SITE_ID;
-let activeUserId: string = BYPASS_USER_ID;
+let activeUserId: string = '';
 
 export const ApiClient = {
   // App-level Context Setters
@@ -66,12 +196,12 @@ export const ApiClient = {
     activeUserId = userId;
   },
 
-  getAuthHeaders(token: string | null = activeToken): Record<string, string> {
+  getAuthHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
     };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    if (activeToken) {
+      headers['Authorization'] = `Bearer ${activeToken}`;
     }
     return headers;
   },
@@ -94,13 +224,15 @@ export const ApiClient = {
   async fetchUserProfile(token: string | null = activeToken): Promise<any> {
     const res = await fetch(ENDPOINTS.ME(ORG_ID), { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch user profile failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeUser(data);
   },
 
   async fetchSites(token: string | null = activeToken): Promise<any[]> {
     const res = await fetch(ENDPOINTS.SITES(ORG_ID), { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch active sites failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return Array.isArray(data) ? data.map(normalizeSite) : [];
   },
 
   async fetchUserTasks(token: string | null = activeToken, siteId: string = activeSiteId, userId: string = activeUserId): Promise<TaskExecution[]> {
@@ -113,7 +245,8 @@ export const ApiClient = {
   async fetchUsers(token: string | null = activeToken): Promise<any[]> {
     const res = await fetch(`/api/v1/admin/users`, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch system users failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return Array.isArray(data) ? data.map(normalizeUser) : [];
   },
 
   async updateTaskStatus(token: string | null = activeToken, siteId: string = activeSiteId, taskId: string = '', status: string = '', checklistState: string = ''): Promise<void> {
@@ -207,7 +340,8 @@ export const ApiClient = {
   async fetchUser(id: string, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/users/${id}`, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch user failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeUser(data);
   },
   async createUser(user: any, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/users`, {
@@ -216,7 +350,8 @@ export const ApiClient = {
       body: JSON.stringify(user)
     });
     if (!res.ok) throw new ResponseError("Create user failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeUser(data);
   },
   async updateUser(id: string, user: any, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/users/${id}`, {
@@ -225,7 +360,8 @@ export const ApiClient = {
       body: JSON.stringify(user)
     });
     if (!res.ok) throw new ResponseError("Update user failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeUser(data);
   },
   async deleteUser(id: string, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/users/${id}`, {
@@ -249,12 +385,14 @@ export const ApiClient = {
   async fetchRoles(token: string | null = activeToken): Promise<any[]> {
     const res = await fetch(`/api/v1/admin/roles`, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch roles failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return Array.isArray(data) ? data.map(normalizeRole) : [];
   },
   async fetchRole(id: string, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/roles/${id}`, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch role failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeRole(data);
   },
   async createRole(role: any, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/roles`, {
@@ -263,7 +401,8 @@ export const ApiClient = {
       body: JSON.stringify(role)
     });
     if (!res.ok) throw new ResponseError("Create role failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeRole(data);
   },
   async updateRole(id: string, role: any, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/roles/${id}`, {
@@ -272,7 +411,8 @@ export const ApiClient = {
       body: JSON.stringify(role)
     });
     if (!res.ok) throw new ResponseError("Update role failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeRole(data);
   },
   async deleteRole(id: string, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/roles/${id}`, {
@@ -287,12 +427,14 @@ export const ApiClient = {
   async fetchOrganizations(token: string | null = activeToken): Promise<any[]> {
     const res = await fetch(`/api/v1/admin/organizations`, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch organizations failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return Array.isArray(data) ? data.map(normalizeOrganization) : [];
   },
   async fetchOrganization(id: string, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/organizations/${id}`, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch organization failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeOrganization(data);
   },
   async createOrganization(org: any, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/organizations`, {
@@ -301,7 +443,8 @@ export const ApiClient = {
       body: JSON.stringify(org)
     });
     if (!res.ok) throw new ResponseError("Create organization failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeOrganization(data);
   },
   async updateOrganization(id: string, org: any, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/organizations/${id}`, {
@@ -310,7 +453,8 @@ export const ApiClient = {
       body: JSON.stringify(org)
     });
     if (!res.ok) throw new ResponseError("Update organization failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeOrganization(data);
   },
   async deleteOrganization(id: string, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/organizations/${id}`, {
@@ -333,12 +477,14 @@ export const ApiClient = {
   async fetchSitesAdmin(token: string | null = activeToken): Promise<any[]> {
     const res = await fetch(`/api/v1/admin/sites`, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch admin sites failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return Array.isArray(data) ? data.map(normalizeSite) : [];
   },
   async fetchSite(id: string, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/sites/${id}`, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch site failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeSite(data);
   },
   async createSite(orgId: string, site: any, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/organizations/${orgId}/sites`, {
@@ -347,7 +493,8 @@ export const ApiClient = {
       body: JSON.stringify(site)
     });
     if (!res.ok) throw new ResponseError("Create site failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeSite(data);
   },
   async updateSite(id: string, site: any, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/sites/${id}`, {
@@ -356,7 +503,8 @@ export const ApiClient = {
       body: JSON.stringify(site)
     });
     if (!res.ok) throw new ResponseError("Update site failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeSite(data);
   },
   async deleteSite(id: string, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/sites/${id}`, {
@@ -371,12 +519,14 @@ export const ApiClient = {
   async fetchLocations(token: string | null = activeToken): Promise<any[]> {
     const res = await fetch(`/api/v1/admin/locations`, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch locations failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return Array.isArray(data) ? data.map(normalizeLocation) : [];
   },
   async fetchLocation(id: string, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/locations/${id}`, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch location failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeLocation(data);
   },
   async createLocation(orgId: string, siteId: string, location: any, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/organizations/${orgId}/sites/${siteId}/locations`, {
@@ -385,7 +535,8 @@ export const ApiClient = {
       body: JSON.stringify(location)
     });
     if (!res.ok) throw new ResponseError("Create location failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeLocation(data);
   },
   async updateLocation(id: string, location: any, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/locations/${id}`, {
@@ -394,7 +545,8 @@ export const ApiClient = {
       body: JSON.stringify(location)
     });
     if (!res.ok) throw new ResponseError("Update location failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeLocation(data);
   },
   async deleteLocation(id: string, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/locations/${id}`, {
@@ -409,12 +561,14 @@ export const ApiClient = {
   async fetchAssets(token: string | null = activeToken): Promise<any[]> {
     const res = await fetch(`/api/v1/admin/assets`, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch assets failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return Array.isArray(data) ? data.map(normalizeAsset) : [];
   },
   async fetchAsset(id: string, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/assets/${id}`, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch asset failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeAsset(data);
   },
   async createAsset(orgId: string, siteId: string, locationId: string, asset: any, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/organizations/${orgId}/sites/${siteId}/locations/${locationId}/assets`, {
@@ -423,7 +577,8 @@ export const ApiClient = {
       body: JSON.stringify(asset)
     });
     if (!res.ok) throw new ResponseError("Create asset failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeAsset(data);
   },
   async updateAsset(id: string, asset: any, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/assets/${id}`, {
@@ -432,7 +587,8 @@ export const ApiClient = {
       body: JSON.stringify(asset)
     });
     if (!res.ok) throw new ResponseError("Update asset failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeAsset(data);
   },
   async deleteAsset(id: string, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/assets/${id}`, {
@@ -447,12 +603,14 @@ export const ApiClient = {
   async fetchTaskTemplates(token: string | null = activeToken): Promise<any[]> {
     const res = await fetch(`/api/v1/admin/tasks/templates`, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch task templates failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return Array.isArray(data) ? data.map(normalizeTaskTemplate) : [];
   },
   async fetchTaskTemplate(id: string, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/tasks/templates/${id}`, { headers: this.getAuthHeaders(token) });
     if (!res.ok) throw new ResponseError("Fetch task template failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeTaskTemplate(data);
   },
   async createTaskTemplate(template: any, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/tasks/templates`, {
@@ -461,7 +619,8 @@ export const ApiClient = {
       body: JSON.stringify(template)
     });
     if (!res.ok) throw new ResponseError("Create task template failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeTaskTemplate(data);
   },
   async updateTaskTemplate(id: string, template: any, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/tasks/templates/${id}`, {
@@ -470,7 +629,8 @@ export const ApiClient = {
       body: JSON.stringify(template)
     });
     if (!res.ok) throw new ResponseError("Update task template failed", res.status);
-    return res.json();
+    const data = await res.json();
+    return normalizeTaskTemplate(data);
   },
   async deleteTaskTemplate(id: string, token: string | null = activeToken): Promise<any> {
     const res = await fetch(`/api/v1/admin/tasks/templates/${id}`, {
@@ -481,3 +641,4 @@ export const ApiClient = {
     return res.json();
   }
 };
+

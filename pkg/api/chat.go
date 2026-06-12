@@ -1249,12 +1249,20 @@ historyBlock:
 		Role:    "user",
 		Content: userMessage,
 	}
+	var finalA2UIData interface{} = a2uiData
+	if a2uiData != nil {
+		if cardMap, ok := a2uiData.(map[string]interface{}); ok {
+			surfaceID := fmt.Sprintf("surface_%s", strings.ToLower(a2uiType))
+			finalA2UIData = NormalizeCardToA2UITransaction(cardMap, surfaceID)
+		}
+	}
+
 	agentResponse := MessageResponse{
 		ID:       fmt.Sprintf("agent-%d", len(history)+1),
 		Role:     "assistant",
 		Content:  replyContent,
 		A2UIType:  a2uiType,
-		A2UIData:  a2uiData,
+		A2UIData:  finalA2UIData,
 	}
 
 	history = append(history, userResponse, agentResponse)

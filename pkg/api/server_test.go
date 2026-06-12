@@ -19,16 +19,74 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/rmcguinness/gemini_task_engine/pkg/api"
 	"github.com/rmcguinness/gemini_task_engine/pkg/model"
 	"github.com/rmcguinness/gemini_task_engine/pkg/service"
 	"github.com/stretchr/testify/assert"
+	"gorm.io/gorm"
 )
+
+// Helper to retrieve a real Google identity token from local gcloud session
+func getGcloudToken() string {
+	paths := []string{
+		"/Users/rmcguinness/Applications/google-cloud-sdk/bin/gcloud",
+		"gcloud",
+		"/opt/homebrew/bin/gcloud",
+		"/usr/local/bin/gcloud",
+		"/usr/bin/gcloud",
+	}
+	var errs []string
+	var token string
+
+	// Construct a robust PATH for the child process to find python3, homebrew, etc.
+	robustPath := "PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/opt/homebrew/bin:/Users/rmcguinness/Applications/google-cloud-sdk/bin"
+
+	for _, path := range paths {
+		cmd := exec.Command(path, "auth", "print-identity-token")
+		
+		// Inject the robust PATH into the command's environment
+		cmd.Env = append(cmd.Env, robustPath)
+		// Propagate other env vars like HOME (required by gcloud to find config)
+		for _, e := range os.Environ() {
+			if !strings.HasPrefix(e, "PATH=") {
+				cmd.Env = append(cmd.Env, e)
+			}
+		}
+
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err == nil {
+			token = strings.TrimSpace(stdout.String())
+			break
+		} else {
+			errs = append(errs, fmt.Sprintf("path %s failed: %v (stderr: %s)", path, err, strings.TrimSpace(stderr.String())))
+		}
+	}
+
+	if token == "" {
+		panic("failed to retrieve gcloud identity token for unit tests. Please run 'gcloud auth login' on your host. Errors:\n" + strings.Join(errs, "\n"))
+	}
+	return token
+}
+
+// Helper to create authenticated requests with a valid mock user UUID for protected endpoints
+func newAuthRequest(method, target string, body io.Reader) *http.Request {
+	req := httptest.NewRequest(method, target, body)
+	req.Header.Set("X-User-ID", "11111111-2222-3333-4444-555555555555")
+	return req
+}
 
 // Mock implementations for service layers
 type mockAdminService struct {
@@ -62,7 +120,7 @@ func (m *mockAdminService) FindUserByOAuth(ctx context.Context, provider, oauthI
 	if m.FindUserByOAuthFunc != nil {
 		return m.FindUserByOAuthFunc(ctx, provider, oauthID)
 	}
-	return nil, nil
+	return nil, gorm.ErrRecordNotFound
 }
 
 func (m *mockAdminService) CreateRole(ctx context.Context, role *model.Role) error {
@@ -82,6 +140,9 @@ func (m *mockAdminService) AssignRole(ctx context.Context, userID, roleID string
 func (m *mockAdminService) RegisterUser(ctx context.Context, user *model.User) error {
 	if m.RegisterUserFunc != nil {
 		return m.RegisterUserFunc(ctx, user)
+	}
+	if user.ID == "" {
+		user.ID = "11111111-2222-3333-4444-555555555555"
 	}
 	return nil
 }
@@ -312,6 +373,12 @@ func (m *mockTaskService) GetLocationByID(ctx context.Context, id string) (*mode
 	return nil, nil
 }
 
+func (m *mockTaskService) GetTaskExecutionByID(ctx context.Context, id string) (*model.TaskExecution, error) { return nil, nil }
+func (m *mockTaskService) GetSiteIDForExecution(ctx context.Context, execID string) (string, error) { return "", nil }
+func (m *mockTaskService) ListTaskExecutions(ctx context.Context) ([]*model.TaskExecution, error) { return nil, nil }
+func (m *mockTaskService) ListTaskExecutionsRange(ctx context.Context, offset, limit int) ([]*model.TaskExecution, error) { return nil, nil }
+func (m *mockTaskService) DeleteTaskExecution(ctx context.Context, id string) error { return nil }
+
 type mockShiftService struct {
 	InitializeShiftFunc    func(ctx context.Context, userID, shiftInstanceID string) (*model.ShiftAgentSession, error)
 	UpdateSessionFunc      func(ctx context.Context, session *model.ShiftAgentSession) error
@@ -355,6 +422,11 @@ func (m *mockShiftService) GetUserProfile(ctx context.Context, userID string) (*
 	return nil, nil
 }
 
+func (m *mockShiftService) GetSessionByID(ctx context.Context, id string) (*model.ShiftAgentSession, error) { return nil, nil }
+func (m *mockShiftService) ListSessions(ctx context.Context) ([]*model.ShiftAgentSession, error) { return nil, nil }
+func (m *mockShiftService) ListSessionsRange(ctx context.Context, offset, limit int) ([]*model.ShiftAgentSession, error) { return nil, nil }
+func (m *mockShiftService) DeleteSession(ctx context.Context, id string) error { return nil }
+
 type mockRAGService struct {
 	RegisterSOPFunc     func(ctx context.Context, sop *model.SOP) error
 	SaveChunksFunc      func(ctx context.Context, chunks []*model.SOPChunk) error
@@ -397,6 +469,15 @@ func (m *mockRAGService) CheckSOPUpdates(ctx context.Context, sopID string) (boo
 	}
 	return false, nil
 }
+
+func (m *mockRAGService) GetSOPByID(ctx context.Context, id string) (*model.SOP, error) { return nil, nil }
+func (m *mockRAGService) ListSOPs(ctx context.Context) ([]*model.SOP, error) { return nil, nil }
+func (m *mockRAGService) ListSOPsRange(ctx context.Context, offset, limit int) ([]*model.SOP, error) { return nil, nil }
+func (m *mockRAGService) DeleteSOP(ctx context.Context, id string) error { return nil }
+func (m *mockRAGService) GetProcessByID(ctx context.Context, id string) (*model.SOPProcess, error) { return nil, nil }
+func (m *mockRAGService) ListProcesses(ctx context.Context) ([]*model.SOPProcess, error) { return nil, nil }
+func (m *mockRAGService) ListProcessesRange(ctx context.Context, offset, limit int) ([]*model.SOPProcess, error) { return nil, nil }
+func (m *mockRAGService) DeleteProcess(ctx context.Context, id string) error { return nil }
 
 type mockAutomationService struct {
 	ProcessBatchEventFunc     func(ctx context.Context, eventInstanceID string) ([]*model.TaskExecution, error)
@@ -613,7 +694,14 @@ func TestUserContextMiddleware(t *testing.T) {
 	automationSvc := &mockAutomationService{}
 	schedulerSvc := &mockSchedulerService{}
 
-	srv, err := api.NewServer(api.Config{Address: "127.0.0.1", Port: "8080"}, adminSvc, taskSvc, shiftSvc, ragSvc, automationSvc, schedulerSvc)
+	// Configure server with real Client ID to arm cryptographic verification
+	srv, err := api.NewServer(api.Config{
+		Address: "127.0.0.1",
+		Port:    "8080",
+		OAuth: api.OAuthConfig{
+			ClientID: "32555940559.apps.googleusercontent.com",
+		},
+	}, adminSvc, taskSvc, shiftSvc, ragSvc, automationSvc, schedulerSvc)
 	assert.NoError(t, err)
 
 	// Target endpoint calls task service, let's capture the user ID passed from operational.go
@@ -625,33 +713,47 @@ func TestUserContextMiddleware(t *testing.T) {
 
 	// Scenario A: X-User-ID Header set
 	reqBody := `{"status":"COMPLETED"}`
-	req := httptest.NewRequest("PATCH", "/api/v1/organizations/org-123/sites/site-123/tasks/task-123/status", bytes.NewBufferString(reqBody))
+	req := newAuthRequest("PATCH", "/api/v1/organizations/org-123/sites/site-123/tasks/task-123/status", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-User-ID", "custom-user-id-1")
 	w := httptest.NewRecorder()
 	srv.Engine().ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "custom-user-id-1", capturedUserID)
+	assert.Equal(t, "11111111-2222-3333-4444-555555555555", capturedUserID)
 
-	// Scenario B: Bearer Authorization Header set
+	// Scenario B: Bearer Authorization Header set (fallback mock when client ID is not configured, but here it is configured so it will fail cryptographic check because it's a mock token)
 	req = httptest.NewRequest("PATCH", "/api/v1/organizations/org-123/sites/site-123/tasks/task-123/status", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer jwt-user-id-2")
 	w = httptest.NewRecorder()
 	srv.Engine().ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "jwt-user-id-2", capturedUserID)
+	assert.Equal(t, http.StatusUnauthorized, w.Code) // Fails because it's a mock token and ClientID is configured
 
-	// Scenario C: No Header fallback
+	// Scenario C: No Header fails (strictly rejects unauthenticated requests)
 	req = httptest.NewRequest("PATCH", "/api/v1/organizations/org-123/sites/site-123/tasks/task-123/status", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
 	srv.Engine().ServeHTTP(w, req)
 
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+	// Scenario D: Real Google ID Token (retrieved via gcloud) - Cryptographic Validation Pass
+	token := getGcloudToken()
+	req = httptest.NewRequest("PATCH", "/api/v1/organizations/org-123/sites/site-123/tasks/task-123/status", bytes.NewBufferString(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer " + token)
+	w = httptest.NewRecorder()
+	srv.Engine().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Logf("Scenario D Response Body: %s", w.Body.String())
+	}
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "00000000-0000-0000-0000-000000000000", capturedUserID)
+	assert.NotEmpty(t, capturedUserID)
+	// Must be a valid dynamically registered GORM UUID
+	_, parseErr := uuid.Parse(capturedUserID)
+	assert.NoError(t, parseErr)
 }
 
 func TestAdminEndpoints(t *testing.T) {
@@ -672,7 +774,7 @@ func TestAdminEndpoints(t *testing.T) {
 			}, nil
 		}
 
-		req := httptest.NewRequest("GET", "/api/v1/admin/users", nil)
+		req := newAuthRequest("GET", "/api/v1/admin/users", nil)
 		w := httptest.NewRecorder()
 		srv.Engine().ServeHTTP(w, req)
 
@@ -693,7 +795,7 @@ func TestAdminEndpoints(t *testing.T) {
 		}
 
 		reqBody := `{"name":"Supervisor","description":"Shift Lead"}`
-		req := httptest.NewRequest("POST", "/api/v1/admin/roles", bytes.NewBufferString(reqBody))
+		req := newAuthRequest("POST", "/api/v1/admin/roles", bytes.NewBufferString(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		srv.Engine().ServeHTTP(w, req)
@@ -713,7 +815,7 @@ func TestAdminEndpoints(t *testing.T) {
 		}
 
 		reqBody := `{"role_id":"role-123"}`
-		req := httptest.NewRequest("PUT", "/api/v1/admin/users/user-456/roles", bytes.NewBufferString(reqBody))
+		req := newAuthRequest("PUT", "/api/v1/admin/users/user-456/roles", bytes.NewBufferString(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		srv.Engine().ServeHTTP(w, req)
@@ -724,7 +826,7 @@ func TestAdminEndpoints(t *testing.T) {
 	})
 
 	t.Run("GetSchedulerStatus", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/api/v1/admin/scheduler/status", nil)
+		req := newAuthRequest("GET", "/api/v1/admin/scheduler/status", nil)
 		w := httptest.NewRecorder()
 		srv.Engine().ServeHTTP(w, req)
 
@@ -737,7 +839,7 @@ func TestAdminEndpoints(t *testing.T) {
 	})
 
 	t.Run("TriggerSchedulerSweep", func(t *testing.T) {
-		req := httptest.NewRequest("POST", "/api/v1/admin/scheduler/trigger", nil)
+		req := newAuthRequest("POST", "/api/v1/admin/scheduler/trigger", nil)
 		w := httptest.NewRecorder()
 		srv.Engine().ServeHTTP(w, req)
 
@@ -765,7 +867,7 @@ func TestOperationalEndpoints(t *testing.T) {
 			}, nil
 		}
 
-		req := httptest.NewRequest("GET", "/api/v1/organizations/org-abc/sites/site-abc/tasks", nil)
+		req := newAuthRequest("GET", "/api/v1/organizations/org-abc/sites/site-abc/tasks", nil)
 		w := httptest.NewRecorder()
 		srv.Engine().ServeHTTP(w, req)
 
@@ -785,7 +887,7 @@ func TestOperationalEndpoints(t *testing.T) {
 			}, nil
 		}
 
-		req := httptest.NewRequest("GET", "/api/v1/organizations/org-abc/tasks", nil)
+		req := newAuthRequest("GET", "/api/v1/organizations/org-abc/tasks", nil)
 		w := httptest.NewRecorder()
 		srv.Engine().ServeHTTP(w, req)
 
@@ -806,7 +908,7 @@ func TestOperationalEndpoints(t *testing.T) {
 			}, nil
 		}
 
-		req := httptest.NewRequest("GET", "/api/v1/organizations/org-abc/sites/site-abc/users/user-123/tasks", nil)
+		req := newAuthRequest("GET", "/api/v1/organizations/org-abc/sites/site-abc/users/user-123/tasks", nil)
 		w := httptest.NewRecorder()
 		srv.Engine().ServeHTTP(w, req)
 
@@ -829,9 +931,9 @@ func TestOperationalEndpoints(t *testing.T) {
 		}
 
 		reqBody := `{"asset_id":"asset-789","justification":"Safety clearance verified"}`
-		req := httptest.NewRequest("POST", "/api/v1/organizations/org-abc/sites/site-abc/tasks/exec-111/override", bytes.NewBufferString(reqBody))
+		req := newAuthRequest("POST", "/api/v1/organizations/org-abc/sites/site-abc/tasks/exec-111/override", bytes.NewBufferString(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-User-ID", "user-admin")
+		req.Header.Set("X-User-ID", "user-admin") // Keep custom mock to test role privileges
 		w := httptest.NewRecorder()
 		srv.Engine().ServeHTTP(w, req)
 
@@ -852,16 +954,17 @@ func TestOperationalEndpoints(t *testing.T) {
 		}
 
 		reqBody := `{"task_execution_id":"exec-222","proposed_assignee_id":"user-333"}`
-		req := httptest.NewRequest("POST", "/api/v1/organizations/org-abc/sites/site-abc/trades", bytes.NewBufferString(reqBody))
+		req := newAuthRequest("POST", "/api/v1/organizations/org-abc/sites/site-abc/trades", bytes.NewBufferString(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-User-ID", "user-initiator")
+		// Use a valid GORM mock UUID instead of blacklisted "user-initiator"
+		req.Header.Set("X-User-ID", "11111111-2222-3333-4444-555555555555")
 		w := httptest.NewRecorder()
 		srv.Engine().ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusCreated, w.Code)
 		assert.Equal(t, "exec-222", capturedExecID)
 		assert.Equal(t, "user-333", capturedProposedAssignee)
-		assert.Equal(t, "user-initiator", capturedUserID)
+		assert.Equal(t, "11111111-2222-3333-4444-555555555555", capturedUserID)
 	})
 }
 
@@ -882,7 +985,7 @@ func TestOperationalEndpointsFailure(t *testing.T) {
 		}
 
 		reqBody := `{"status":"COMPLETED"}`
-		req := httptest.NewRequest("PATCH", "/api/v1/organizations/org-abc/sites/site-abc/tasks/exec-fail/status", bytes.NewBufferString(reqBody))
+		req := newAuthRequest("PATCH", "/api/v1/organizations/org-abc/sites/site-abc/tasks/exec-fail/status", bytes.NewBufferString(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		srv.Engine().ServeHTTP(w, req)
@@ -910,7 +1013,7 @@ func TestAdminCRUDEndpoints(t *testing.T) {
 			return &model.User{ID: id, Email: "test@example.com"}, nil
 		}
 
-		req := httptest.NewRequest("GET", "/api/v1/admin/users/user-123", nil)
+		req := newAuthRequest("GET", "/api/v1/admin/users/user-123", nil)
 		w := httptest.NewRecorder()
 		srv.Engine().ServeHTTP(w, req)
 
@@ -927,7 +1030,7 @@ func TestAdminCRUDEndpoints(t *testing.T) {
 			return []*model.User{{ID: "user-range", Email: "range@example.com"}}, nil
 		}
 
-		req := httptest.NewRequest("GET", "/api/v1/admin/users?offset=5&limit=15", nil)
+		req := newAuthRequest("GET", "/api/v1/admin/users?offset=5&limit=15", nil)
 		w := httptest.NewRecorder()
 		srv.Engine().ServeHTTP(w, req)
 
@@ -944,7 +1047,7 @@ func TestAdminCRUDEndpoints(t *testing.T) {
 			return nil
 		}
 
-		req := httptest.NewRequest("DELETE", "/api/v1/admin/users/user-delete", nil)
+		req := newAuthRequest("DELETE", "/api/v1/admin/users/user-delete", nil)
 		w := httptest.NewRecorder()
 		srv.Engine().ServeHTTP(w, req)
 

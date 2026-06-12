@@ -10,9 +10,9 @@ py_library(
 py_library(
     name = "agents_lib",
     srcs = [
+        "a2ui_transpiler.py",
         "agents/task_agent/__init__.py",
         "agents/task_agent/task_agent.py",
-        "a2ui_transpiler.py",
     ],
     data = ["agents/task_agent/agent.json"],
     deps = [":config"],
@@ -21,18 +21,18 @@ py_library(
 py_binary(
     name = "agent",
     srcs = ["main.py"],
+    imports = ["."],  # Support local directory imports
     main = "main.py",
-    imports = ["."], # Support local directory imports
     deps = [
-        ":config",
         ":agents_lib",
+        ":config",
     ],
 )
 
 py_test(
     name = "test_config",
     srcs = ["tests/test_config.py"],
-    imports = ["."], # Support local directory imports
+    imports = ["."],  # Support local directory imports
     deps = [
         ":config",
     ],
@@ -41,7 +41,7 @@ py_test(
 py_test(
     name = "test_agent",
     srcs = ["tests/test_agent.py"],
-    imports = ["."], # Support local directory imports
+    imports = ["."],  # Support local directory imports
     deps = [
         ":agents_lib",
     ],
@@ -50,7 +50,7 @@ py_test(
 py_test(
     name = "test_a2ui_transpiler",
     srcs = ["tests/test_a2ui_transpiler.py"],
-    imports = ["."], # Support local directory imports
+    imports = ["."],  # Support local directory imports
     deps = [
         ":agents_lib",
     ],
@@ -60,12 +60,15 @@ sh_binary(
     name = "dev",
     srcs = ["run_agent.sh"],
     data = [
-        "main.py",
-        "config.py",
-        ":agents_lib",
-        ".env.toml",
-        ".env.local.toml",
         ".env.dev.toml",
+        ".env.local.toml",
+        ".env.toml",
+        "config.py",
+        "main.py",
+        ":agents_lib",
+    ],
+    tags = [
+        "local",
+        "no-sandbox",
     ],
 )
-

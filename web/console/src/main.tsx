@@ -15,8 +15,12 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import { initTelemetry } from './telemetry'
 import App from './App.tsx'
 import { AppProvider } from './contexts/AppContext'
+
+// Initialize OpenTelemetry Web Tracing
+initTelemetry('gemini-task-console');
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

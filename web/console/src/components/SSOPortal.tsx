@@ -39,7 +39,8 @@ const SSOPortal: React.FC<SSOPortalProps> = ({
         google.accounts.id.initialize({
           client_id: googleClientID,
           callback: handleGoogleCredentialResponse,
-          auto_select: false
+          auto_select: false,
+          use_fedcm_for_prompt: false
         });
 
         const targetBtn = document.getElementById("google-signin-btn");
@@ -86,7 +87,7 @@ const SSOPortal: React.FC<SSOPortalProps> = ({
       <div className="panel-card" style={{ width: '400px', padding: '32px', textAlign: 'center', gap: '24px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
           <div className="pulse-indicator" style={{ width: '12px', height: '12px', background: 'var(--neon-primary)', boxShadow: '0 0 12px var(--neon-primary)' }}></div>
-          <h1 className="brand-title" style={{ fontSize: '1.8rem', margin: '8px 0 0 0' }}>NEXUS OPERATIONS PORTAL</h1>
+          <h1 className="brand-title" style={{ fontSize: '1.8rem', margin: '8px 0 0 0' }}>Gemini Tasksing Portal</h1>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Secure Multi-Node SSO Authentication</span>
         </div>
 

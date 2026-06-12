@@ -35,6 +35,13 @@ build/
 scratch
 .bazel-deploy-cache/
 
+# Android & IDE Exclusions
+.gradle/
+local.properties
+.idea/
+build/
+app/build/
+
 # Terraform local credentials and state registries
 *passwords_registry.csv
 *.tfstate

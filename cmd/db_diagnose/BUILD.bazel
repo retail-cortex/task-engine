@@ -1,0 +1,18 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "db_diagnose_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/rmcguinness/gemini_task_engine/cmd/db_diagnose",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//pkg/persistence",
+        "@modenv//pkg/modenv",
+    ],
+)
+
+go_binary(
+    name = "db_diagnose",
+    embed = [":db_diagnose_lib"],
+    visibility = ["//visibility:public"],
+)

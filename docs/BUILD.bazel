@@ -26,8 +26,8 @@ hugo_site(
     config = "config.toml",
     content = glob(["content/**/*"]),
     layouts = glob(["layouts/**/*"]),
-    theme = ":hugo_book",
     quiet = False,
+    theme = ":hugo_book",
     verbose = False,
 )
 

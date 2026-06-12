@@ -326,6 +326,6 @@ func TestMCPHandler_GetUserContextTool(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.Nil(t, resp)
-		assert.Contains(t, err.Error(), "user context not initialized")
+		assert.Contains(t, err.Error(), "unauthorized: user ID not found in context")
 	})
 }

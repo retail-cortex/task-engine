@@ -594,7 +594,7 @@
     "@@rules_hugo+//hugo:extensions.bzl%hugo_deps": {
       "general": {
         "bzlTransitiveDigest": "fHLxa1PkaQs9vWSO3GrDPPB8EdXkItmok9HbjPQUfwY=",
-        "usagesDigest": "I79qac5ewNjr2QPv5j3E4ET2lPfkEMRhGRjf5V6+4M4=",
+        "usagesDigest": "MDuFPV2zYMBx3TTdVy5sp5NaJVhFe0Q3zsS39BMwP/M=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},

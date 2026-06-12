@@ -100,7 +100,7 @@ func (h *OperationalHandler) GetMe(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, user)
+	c.JSON(http.StatusOK, toUserDTO(user))
 }
 
 func (h *OperationalHandler) ListSites(c *gin.Context) {
@@ -109,7 +109,11 @@ func (h *OperationalHandler) ListSites(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, sites)
+	var dtos []SiteDTO
+	for _, s := range sites {
+		dtos = append(dtos, toSiteDTO(s))
+	}
+	c.JSON(http.StatusOK, dtos)
 }
 
 func (h *OperationalHandler) GetOrgTasks(c *gin.Context) {

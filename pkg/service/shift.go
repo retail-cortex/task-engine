@@ -29,6 +29,10 @@ type ShiftService interface {
 	ListActiveUsers(ctx context.Context) ([]*model.User, error)
 	ListActiveOnShiftUsers(ctx context.Context, siteID string) ([]*model.User, error)
 	GetUserProfile(ctx context.Context, userID string) (*model.User, error)
+	GetSessionByID(ctx context.Context, id string) (*model.ShiftAgentSession, error)
+	ListSessions(ctx context.Context) ([]*model.ShiftAgentSession, error)
+	ListSessionsRange(ctx context.Context, offset, limit int) ([]*model.ShiftAgentSession, error)
+	DeleteSession(ctx context.Context, id string) error
 }
 
 type shiftService struct {
@@ -98,4 +102,20 @@ func (s *shiftService) ListActiveOnShiftUsers(ctx context.Context, siteID string
 
 func (s *shiftService) GetUserProfile(ctx context.Context, userID string) (*model.User, error) {
 	return s.userRepo.FindByID(ctx, userID)
+}
+
+func (s *shiftService) GetSessionByID(ctx context.Context, id string) (*model.ShiftAgentSession, error) {
+	return s.sessionRepo.FindByID(ctx, id)
+}
+
+func (s *shiftService) ListSessions(ctx context.Context) ([]*model.ShiftAgentSession, error) {
+	return s.sessionRepo.List(ctx)
+}
+
+func (s *shiftService) ListSessionsRange(ctx context.Context, offset, limit int) ([]*model.ShiftAgentSession, error) {
+	return s.sessionRepo.ListRange(ctx, offset, limit)
+}
+
+func (s *shiftService) DeleteSession(ctx context.Context, id string) error {
+	return s.sessionRepo.Delete(ctx, id)
 }

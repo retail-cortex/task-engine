@@ -41,6 +41,12 @@ type mockSOPRepository struct {
 	UpdateProcessFunc   func(ctx context.Context, p *model.SOPProcess) error
 	CreateChunksFunc    func(ctx context.Context, chunks []*model.SOPChunk) error
 	QuerySimilarityFunc func(ctx context.Context, query model.Float32Vector, limit int) ([]*model.SOPChunk, error)
+	ListFunc                 func(ctx context.Context) ([]*model.SOP, error)
+	ListRangeFunc            func(ctx context.Context, offset, limit int) ([]*model.SOP, error)
+	DeleteFunc               func(ctx context.Context, id string) error
+	ListProcessesFunc        func(ctx context.Context) ([]*model.SOPProcess, error)
+	ListProcessesRangeFunc   func(ctx context.Context, offset, limit int) ([]*model.SOPProcess, error)
+	DeleteProcessFunc        func(ctx context.Context, id string) error
 }
 
 func (m *mockSOPRepository) Create(ctx context.Context, s *model.SOP) error {
@@ -97,6 +103,48 @@ func (m *mockSOPRepository) QuerySimilarity(ctx context.Context, query model.Flo
 		return m.QuerySimilarityFunc(ctx, query, limit)
 	}
 	return nil, nil
+}
+
+func (m *mockSOPRepository) List(ctx context.Context) ([]*model.SOP, error) {
+	if m.ListFunc != nil {
+		return m.ListFunc(ctx)
+	}
+	return nil, nil
+}
+
+func (m *mockSOPRepository) ListRange(ctx context.Context, offset, limit int) ([]*model.SOP, error) {
+	if m.ListRangeFunc != nil {
+		return m.ListRangeFunc(ctx, offset, limit)
+	}
+	return nil, nil
+}
+
+func (m *mockSOPRepository) Delete(ctx context.Context, id string) error {
+	if m.DeleteFunc != nil {
+		return m.DeleteFunc(ctx, id)
+	}
+	return nil
+}
+
+func (m *mockSOPRepository) ListProcesses(ctx context.Context) ([]*model.SOPProcess, error) {
+	if m.ListProcessesFunc != nil {
+		return m.ListProcessesFunc(ctx)
+	}
+	return nil, nil
+}
+
+func (m *mockSOPRepository) ListProcessesRange(ctx context.Context, offset, limit int) ([]*model.SOPProcess, error) {
+	if m.ListProcessesRangeFunc != nil {
+		return m.ListProcessesRangeFunc(ctx, offset, limit)
+	}
+	return nil, nil
+}
+
+func (m *mockSOPRepository) DeleteProcess(ctx context.Context, id string) error {
+	if m.DeleteProcessFunc != nil {
+		return m.DeleteProcessFunc(ctx, id)
+	}
+	return nil
 }
 
 // Mock EmbeddingGenerator
@@ -493,5 +541,101 @@ func TestRAGService_CheckSOPUpdates(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.True(t, changed)
+	})
+}
+
+func TestRAGService_CRUD(t *testing.T) {
+	t.Run("SOP CRUD success", func(t *testing.T) {
+		expectedSOP := &model.SOP{ID: "sop-1", Title: "Title 1"}
+		expectedList := []*model.SOP{
+			expectedSOP,
+			{ID: "sop-2", Title: "Title 2"},
+		}
+		
+		calledDelete := false
+		mockRepo := &mockSOPRepository{
+			FindByIDFunc: func(ctx context.Context, id string) (*model.SOP, error) {
+				assert.Equal(t, "sop-1", id)
+				return expectedSOP, nil
+			},
+			ListFunc: func(ctx context.Context) ([]*model.SOP, error) {
+				return expectedList, nil
+			},
+			ListRangeFunc: func(ctx context.Context, offset, limit int) ([]*model.SOP, error) {
+				assert.Equal(t, 1, offset)
+				assert.Equal(t, 10, limit)
+				return expectedList[1:], nil
+			},
+			DeleteFunc: func(ctx context.Context, id string) error {
+				assert.Equal(t, "sop-1", id)
+				calledDelete = true
+				return nil
+			},
+		}
+		
+		svc := NewRAGService(mockRepo, nil)
+		
+		resGet, err := svc.GetSOPByID(context.Background(), "sop-1")
+		assert.NoError(t, err)
+		assert.Equal(t, expectedSOP, resGet)
+		
+		resList, err := svc.ListSOPs(context.Background())
+		assert.NoError(t, err)
+		assert.Equal(t, expectedList, resList)
+		
+		resListRange, err := svc.ListSOPsRange(context.Background(), 1, 10)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedList[1:], resListRange)
+		
+		err = svc.DeleteSOP(context.Background(), "sop-1")
+		assert.NoError(t, err)
+		assert.True(t, calledDelete)
+	})
+
+	t.Run("SOPProcess CRUD success", func(t *testing.T) {
+		expectedProc := &model.SOPProcess{ID: "proc-1", Status: "COMPLETED"}
+		expectedList := []*model.SOPProcess{
+			expectedProc,
+			{ID: "proc-2", Status: "FAILED"},
+		}
+		
+		calledDelete := false
+		mockRepo := &mockSOPRepository{
+			FindProcessByIDFunc: func(ctx context.Context, id string) (*model.SOPProcess, error) {
+				assert.Equal(t, "proc-1", id)
+				return expectedProc, nil
+			},
+			ListProcessesFunc: func(ctx context.Context) ([]*model.SOPProcess, error) {
+				return expectedList, nil
+			},
+			ListProcessesRangeFunc: func(ctx context.Context, offset, limit int) ([]*model.SOPProcess, error) {
+				assert.Equal(t, 1, offset)
+				assert.Equal(t, 10, limit)
+				return expectedList[1:], nil
+			},
+			DeleteProcessFunc: func(ctx context.Context, id string) error {
+				assert.Equal(t, "proc-1", id)
+				calledDelete = true
+				return nil
+			},
+		}
+		
+		svc := NewRAGService(mockRepo, nil)
+		
+		resGet, err := svc.GetProcessByID(context.Background(), "proc-1")
+		assert.NoError(t, err)
+		assert.Equal(t, expectedProc, resGet)
+		
+		resList, err := svc.ListProcesses(context.Background())
+		assert.NoError(t, err)
+		assert.Equal(t, expectedList, resList)
+		
+		resListRange, err := svc.ListProcessesRange(context.Background(), 1, 10)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedList[1:], resListRange)
+		
+		err = svc.DeleteProcess(context.Background(), "proc-1")
+		assert.NoError(t, err)
+		assert.True(t, calledDelete)
 	})
 }

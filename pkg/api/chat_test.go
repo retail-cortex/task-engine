@@ -83,26 +83,30 @@ func TestChatHandler_SendMessage(t *testing.T) {
 		
 		a2uiMap, ok := resp.A2UIData.(map[string]interface{})
 		assert.True(t, ok)
-		assert.Equal(t, "card", a2uiMap["type"])
-		assert.Equal(t, "METAR AIRPORT WIND AUDIT (KDFW)", a2uiMap["title"])
-		assert.Equal(t, "standard", a2uiMap["style"])
 
-		children, ok := a2uiMap["children"].([]interface{})
-		assert.True(t, ok)
-		assert.Len(t, children, 1)
+		beginRendering := a2uiMap["beginRendering"].(map[string]interface{})
+		assert.Equal(t, "surface_weather", beginRendering["surfaceId"])
+		rootID := beginRendering["root"].(string)
 
-		tableChild, ok := children[0].(map[string]interface{})
-		assert.True(t, ok)
-		assert.Equal(t, "table", tableChild["type"])
+		surfaceUpdate := a2uiMap["surfaceUpdate"].(map[string]interface{})
+		assert.Equal(t, "surface_weather", surfaceUpdate["surfaceId"])
 
-		rows, ok := tableChild["rows"].([]interface{})
-		assert.True(t, ok)
-		assert.Len(t, rows, 5)
+		components := surfaceUpdate["components"].([]interface{})
+		assert.NotEmpty(t, components)
 
-		row0, ok := rows[0].(map[string]interface{})
-		assert.True(t, ok)
-		assert.Equal(t, "Station", row0["label"])
-		assert.Equal(t, "KDFW", row0["value"])
+		// Find the root card component in the registry
+		var rootComponent map[string]interface{}
+		for _, c := range components {
+			comp := c.(map[string]interface{})
+			if comp["id"] == rootID {
+				rootComponent = comp
+				break
+			}
+		}
+		assert.NotNil(t, rootComponent)
+
+		cardProps := rootComponent["component"].(map[string]interface{})["Card"].(map[string]interface{})
+		assert.Equal(t, "METAR AIRPORT WIND AUDIT (KDFW)", cardProps["title"])
 
 		// Verify database storage hooks updated and logged conversation history
 		assert.NotNil(t, updateCaptured)
@@ -156,44 +160,32 @@ func TestChatHandler_SendMessage(t *testing.T) {
 		
 		a2uiMap, ok := resp.A2UIData.(map[string]interface{})
 		assert.True(t, ok)
-		assert.Equal(t, "card", a2uiMap["type"])
-		assert.Equal(t, "STORE SPATIAL BLUEPRINT MAP", a2uiMap["title"])
 
-		children, ok := a2uiMap["children"].([]interface{})
-		assert.True(t, ok)
-		assert.Len(t, children, 4)
+		beginRendering := a2uiMap["beginRendering"].(map[string]interface{})
+		assert.Equal(t, "surface_store_layout", beginRendering["surfaceId"])
+		rootID := beginRendering["root"].(string)
+		assert.NotEmpty(t, rootID)
 
-		textChild, ok := children[0].(map[string]interface{})
-		assert.True(t, ok)
-		assert.Equal(t, "text", textChild["type"])
+		surfaceUpdate := a2uiMap["surfaceUpdate"].(map[string]interface{})
+		assert.Equal(t, "surface_store_layout", surfaceUpdate["surfaceId"])
 
-		canvasChild, ok := children[1].(map[string]interface{})
-		assert.True(t, ok)
-		assert.Equal(t, "canvas", canvasChild["type"])
-		assert.Equal(t, "boutique", canvasChild["layout"])
+		components := surfaceUpdate["components"].([]interface{})
+		assert.NotEmpty(t, components)
 
-		beacon, ok := canvasChild["beacon"].(map[string]interface{})
-		assert.True(t, ok)
-		assert.Equal(t, float64(175), beacon["x"])
-		assert.Equal(t, float64(25), beacon["y"])
-		assert.Equal(t, "Secure Back-Office Cash Vault", beacon["name"])
-
-		tableChild, ok := children[2].(map[string]interface{})
-		assert.True(t, ok)
-		assert.Equal(t, "table", tableChild["type"])
-
-		rows, ok := tableChild["rows"].([]interface{})
-		assert.True(t, ok)
-		assert.Len(t, rows, 3)
-
-		rowVal, ok := rows[1].(map[string]interface{})
-		assert.True(t, ok)
-		assert.Equal(t, "Focal Highlight Beacon", rowVal["label"])
-		assert.Equal(t, "Secure Back-Office Cash Vault", rowVal["value"])
-
-		buttonRow, ok := children[3].(map[string]interface{})
-		assert.True(t, ok)
-		assert.Equal(t, "row", buttonRow["type"])
+		// Verify there is an Image canvas component with layout boutique and coordinates
+		var canvasComponent map[string]interface{}
+		for _, c := range components {
+			comp := c.(map[string]interface{})
+			wrapper := comp["component"].(map[string]interface{})
+			if img, ok := wrapper["Image"].(map[string]interface{}); ok {
+				canvasComponent = img
+				break
+			}
+		}
+		assert.NotNil(t, canvasComponent)
+		urlVal := canvasComponent["url"].(map[string]interface{})["literalString"].(string)
+		assert.Contains(t, urlVal, "/api/v1/blueprint?layout=boutique")
+		assert.Contains(t, urlVal, "&x=175&y=25")
 
 		// Verify database storage hooks updated and logged conversation history
 		assert.NotNil(t, updateCaptured)

@@ -46,7 +46,13 @@ bazel mod tidy
 ```
 
 ### 2. Starting the Concurrent Development Environment
-To start both frontend applications and the Go backend API server simultaneously in a parallel dev session, run the `dev_server` target:
+To start both frontend applications and the Go backend API server simultaneously in a parallel dev session, run the `dev_portal` target:
+```bash
+bazel run //:dev_portal
+```
+
+#### Starting Only the Go API Backend & MCP Server
+If you only need to run the Go API backend and JSON-RPC MCP server (for example, when testing and developing with the native Android gateway in `apps/gtasks`), run the isolated `dev_server` target:
 ```bash
 bazel run //:dev_server
 ```

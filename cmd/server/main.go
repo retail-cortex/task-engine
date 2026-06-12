@@ -18,10 +18,13 @@ import (
 	"context"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/rmcguinness/gemini_task_engine/pkg/api"
 	"github.com/rmcguinness/gemini_task_engine/pkg/persistence"
 	"github.com/rmcguinness/gemini_task_engine/pkg/service"
+	"github.com/rmcguinness/gemini_task_engine/pkg/telemetry"
 	"github.com/rrmcguinness/modenv/pkg/modenv"
 )
 
@@ -33,6 +36,33 @@ type ServerConfig struct {
 }
 
 func main() {
+	// Force immediate local credential resolution and native DNS resolution
+	// to prevent 30-second cold-start metadata server timeouts in local offline contexts.
+	// In deployed Cloud Run environments (dev/prod), we must use the real metadata server.
+	if os.Getenv("MODENV_RUNTIME") == "" || os.Getenv("MODENV_RUNTIME") == "local" {
+		os.Setenv("GCE_METADATA_HOST", "127.0.0.1:9999")
+	}
+	os.Setenv("GRPC_DNS_RESOLVER", "native")
+
+	// Initialize OpenTelemetry Tracing
+	otelShutdown, otelErr := telemetry.InitTelemetry(context.Background(), "gemini-task-api")
+	if otelErr != nil {
+		log.Printf("WARNING: Failed to initialize OpenTelemetry: %v. Traces will not be exported.", otelErr)
+	} else {
+		defer otelShutdown()
+
+		// Setup signal handling to ensure traces are flushed on sudden SIGINT/SIGTERM
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			sig := <-sigChan
+			log.Printf("System received shutdown signal: %v. Triggering OpenTelemetry flush...", sig)
+			otelShutdown()
+			log.Println("Telemetry successfully flushed. Exiting.")
+			os.Exit(0)
+		}()
+	}
+
 	log.Printf("Loading environment configurations using modenv...")
 	var cfg ServerConfig
 	cloneCfg, err := modenv.Load(&cfg)

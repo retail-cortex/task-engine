@@ -26,12 +26,24 @@ import (
 type AdminHandler struct {
 	adminService     service.AdminService
 	schedulerService service.SchedulerService
+	taskService      service.TaskService
+	shiftService     service.ShiftService
+	ragService       service.RAGService
 }
 
-func NewAdminHandler(adminService service.AdminService, schedulerService service.SchedulerService) *AdminHandler {
+func NewAdminHandler(
+	adminService service.AdminService,
+	schedulerService service.SchedulerService,
+	taskService service.TaskService,
+	shiftService service.ShiftService,
+	ragService service.RAGService,
+) *AdminHandler {
 	return &AdminHandler{
 		adminService:     adminService,
 		schedulerService: schedulerService,
+		taskService:      taskService,
+		shiftService:     shiftService,
+		ragService:       ragService,
 	}
 }
 
@@ -61,7 +73,11 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, users)
+		var dtos []UserDTO
+		for _, u := range users {
+			dtos = append(dtos, toUserDTO(u))
+		}
+		c.JSON(http.StatusOK, dtos)
 		return
 	}
 	users, err := h.adminService.ListUsers(c.Request.Context())
@@ -69,7 +85,11 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, users)
+	var dtos []UserDTO
+	for _, u := range users {
+		dtos = append(dtos, toUserDTO(u))
+	}
+	c.JSON(http.StatusOK, dtos)
 }
 
 func (h *AdminHandler) GetUser(c *gin.Context) {
@@ -569,4 +589,160 @@ func (h *AdminHandler) TriggerSchedulerSweep(c *gin.Context) {
 func (h *AdminHandler) GetSchedulerStatus(c *gin.Context) {
 	status := h.schedulerService.GetStatus()
 	c.JSON(http.StatusOK, status)
+}
+
+// --- Task Execution Handlers ---
+
+func (h *AdminHandler) ListTaskExecutions(c *gin.Context) {
+	if offset, limit, ok := parseOffsetLimit(c); ok {
+		execs, err := h.taskService.ListTaskExecutionsRange(c.Request.Context(), offset, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, execs)
+		return
+	}
+	execs, err := h.taskService.ListTaskExecutions(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, execs)
+}
+
+func (h *AdminHandler) GetTaskExecution(c *gin.Context) {
+	id := c.Param("id")
+	exec, err := h.taskService.GetTaskExecutionByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, exec)
+}
+
+func (h *AdminHandler) DeleteTaskExecution(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.taskService.DeleteTaskExecution(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+// --- Shift Agent Session Handlers ---
+
+func (h *AdminHandler) ListShiftSessions(c *gin.Context) {
+	if offset, limit, ok := parseOffsetLimit(c); ok {
+		sess, err := h.shiftService.ListSessionsRange(c.Request.Context(), offset, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, sess)
+		return
+	}
+	sess, err := h.shiftService.ListSessions(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, sess)
+}
+
+func (h *AdminHandler) GetShiftSession(c *gin.Context) {
+	id := c.Param("id")
+	sess, err := h.shiftService.GetSessionByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, sess)
+}
+
+func (h *AdminHandler) DeleteShiftSession(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.shiftService.DeleteSession(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+// --- SOP RAG Handlers ---
+
+func (h *AdminHandler) ListSOPs(c *gin.Context) {
+	if offset, limit, ok := parseOffsetLimit(c); ok {
+		sops, err := h.ragService.ListSOPsRange(c.Request.Context(), offset, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, sops)
+		return
+	}
+	sops, err := h.ragService.ListSOPs(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, sops)
+}
+
+func (h *AdminHandler) GetSOP(c *gin.Context) {
+	id := c.Param("id")
+	sop, err := h.ragService.GetSOPByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, sop)
+}
+
+func (h *AdminHandler) DeleteSOP(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.ragService.DeleteSOP(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+// --- SOP Process Handlers ---
+
+func (h *AdminHandler) ListProcesses(c *gin.Context) {
+	if offset, limit, ok := parseOffsetLimit(c); ok {
+		procs, err := h.ragService.ListProcessesRange(c.Request.Context(), offset, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, procs)
+		return
+	}
+	procs, err := h.ragService.ListProcesses(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, procs)
+}
+
+func (h *AdminHandler) GetProcess(c *gin.Context) {
+	id := c.Param("id")
+	proc, err := h.ragService.GetProcessByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, proc)
+}
+
+func (h *AdminHandler) DeleteProcess(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.ragService.DeleteProcess(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }

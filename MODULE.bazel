@@ -34,9 +34,15 @@ use_repo(
     "com_github_metoro_io_mcp_golang",
     "com_github_stretchr_testify",
     "com_google_cloud_go_alloydbconn",
+    "com_google_cloud_go_texttospeech",
     "io_gorm_driver_postgres",
     "io_gorm_gorm",
     "org_golang_google_api",
+    "com_github_googlecloudplatform_opentelemetry_operations_go_exporter_trace",
+    "io_opentelemetry_go_contrib_instrumentation_github_com_gin_gonic_gin_otelgin",
+    "io_opentelemetry_go_otel",
+    "io_opentelemetry_go_otel_sdk",
+    "org_golang_x_oauth2",
 )
 
 bazel_dep(name = "modenv", version = "0.0.1")
@@ -67,8 +73,8 @@ bazel_dep(name = "rules_multirun", version = "0.9.0")
 bazel_dep(name = "rules_hugo", version = "0.3.0")
 git_override(
     module_name = "rules_hugo",
-    remote = "https://github.com/retail-cortex/rules-hugo.git",
     commit = "4710c8855aee048aa98f6b6be57723ae83084fcc",
+    remote = "https://github.com/retail-cortex/rules-hugo.git",
 )
 
 hugo_deps = use_extension("@rules_hugo//hugo:extensions.bzl", "hugo_deps")
@@ -80,11 +86,10 @@ filegroup(
     srcs = glob(["**/*"]),
 )
 """,
-    url = "https://github.com/alex-shpak/hugo-book/archive/v11.0.0.tar.gz",
     strip_prefix = "hugo-book-11.0.0",
+    url = "https://github.com/alex-shpak/hugo-book/archive/v11.0.0.tar.gz",
 )
 use_repo(hugo_deps, "hugo", "hugo_book")
 
 # Python compilation rules
 bazel_dep(name = "rules_python", version = "0.35.0")
-

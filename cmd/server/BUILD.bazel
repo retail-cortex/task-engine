@@ -23,6 +23,7 @@ go_library(
         "//pkg/api",
         "//pkg/persistence",
         "//pkg/service",
+        "//pkg/telemetry",
         "@modenv//pkg/modenv",
     ],
 )
@@ -35,5 +36,19 @@ go_binary(
         "//:.env.toml",
     ],
     embed = [":server_lib"],
+    visibility = ["//visibility:public"],
+)
+
+sh_binary(
+    name = "dev",
+    srcs = ["run_server.sh"],
+    data = [
+        "main.go",
+        ":server",
+    ],
+    tags = [
+        "local",
+        "no-sandbox",
+    ],
     visibility = ["//visibility:public"],
 )

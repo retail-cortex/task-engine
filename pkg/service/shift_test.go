@@ -42,6 +42,10 @@ type MockShiftAgentSessionRepository struct {
 	persistence.ShiftAgentSessionRepository
 	FindByShiftFunc func(ctx context.Context, assigneeID, shiftInstanceID string) (*model.ShiftAgentSession, error)
 	CreateFunc      func(ctx context.Context, s *model.ShiftAgentSession) error
+	FindByIDFunc    func(ctx context.Context, id string) (*model.ShiftAgentSession, error)
+	ListFunc        func(ctx context.Context) ([]*model.ShiftAgentSession, error)
+	ListRangeFunc   func(ctx context.Context, offset, limit int) ([]*model.ShiftAgentSession, error)
+	DeleteFunc      func(ctx context.Context, id string) error
 }
 
 func (m *MockShiftAgentSessionRepository) FindByShift(ctx context.Context, assigneeID, shiftInstanceID string) (*model.ShiftAgentSession, error) {
@@ -54,6 +58,34 @@ func (m *MockShiftAgentSessionRepository) FindByShift(ctx context.Context, assig
 func (m *MockShiftAgentSessionRepository) Create(ctx context.Context, s *model.ShiftAgentSession) error {
 	if m.CreateFunc != nil {
 		return m.CreateFunc(ctx, s)
+	}
+	return nil
+}
+
+func (m *MockShiftAgentSessionRepository) FindByID(ctx context.Context, id string) (*model.ShiftAgentSession, error) {
+	if m.FindByIDFunc != nil {
+		return m.FindByIDFunc(ctx, id)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *MockShiftAgentSessionRepository) List(ctx context.Context) ([]*model.ShiftAgentSession, error) {
+	if m.ListFunc != nil {
+		return m.ListFunc(ctx)
+	}
+	return nil, nil
+}
+
+func (m *MockShiftAgentSessionRepository) ListRange(ctx context.Context, offset, limit int) ([]*model.ShiftAgentSession, error) {
+	if m.ListRangeFunc != nil {
+		return m.ListRangeFunc(ctx, offset, limit)
+	}
+	return nil, nil
+}
+
+func (m *MockShiftAgentSessionRepository) Delete(ctx context.Context, id string) error {
+	if m.DeleteFunc != nil {
+		return m.DeleteFunc(ctx, id)
 	}
 	return nil
 }
@@ -171,5 +203,69 @@ func TestShiftService_GetUserProfile(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, user)
 		assert.Equal(t, "db error", err.Error())
+	})
+}
+
+func TestShiftService_SessionCRUD(t *testing.T) {
+	t.Run("GetSessionByID success", func(t *testing.T) {
+		expected := &model.ShiftAgentSession{ID: "session-1", Status: "ACTIVE"}
+		mockSessionRepo := &MockShiftAgentSessionRepository{
+			FindByIDFunc: func(ctx context.Context, id string) (*model.ShiftAgentSession, error) {
+				assert.Equal(t, "session-1", id)
+				return expected, nil
+			},
+		}
+		svc := NewShiftService(mockSessionRepo, nil)
+		res, err := svc.GetSessionByID(context.Background(), "session-1")
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+	})
+
+	t.Run("ListSessions success", func(t *testing.T) {
+		expected := []*model.ShiftAgentSession{
+			{ID: "session-1", Status: "ACTIVE"},
+			{ID: "session-2", Status: "INACTIVE"},
+		}
+		mockSessionRepo := &MockShiftAgentSessionRepository{
+			ListFunc: func(ctx context.Context) ([]*model.ShiftAgentSession, error) {
+				return expected, nil
+			},
+		}
+		svc := NewShiftService(mockSessionRepo, nil)
+		res, err := svc.ListSessions(context.Background())
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+	})
+
+	t.Run("ListSessionsRange success", func(t *testing.T) {
+		expected := []*model.ShiftAgentSession{
+			{ID: "session-2", Status: "INACTIVE"},
+		}
+		mockSessionRepo := &MockShiftAgentSessionRepository{
+			ListRangeFunc: func(ctx context.Context, offset, limit int) ([]*model.ShiftAgentSession, error) {
+				assert.Equal(t, 1, offset)
+				assert.Equal(t, 10, limit)
+				return expected, nil
+			},
+		}
+		svc := NewShiftService(mockSessionRepo, nil)
+		res, err := svc.ListSessionsRange(context.Background(), 1, 10)
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+	})
+
+	t.Run("DeleteSession success", func(t *testing.T) {
+		called := false
+		mockSessionRepo := &MockShiftAgentSessionRepository{
+			DeleteFunc: func(ctx context.Context, id string) error {
+				assert.Equal(t, "session-1", id)
+				called = true
+				return nil
+			},
+		}
+		svc := NewShiftService(mockSessionRepo, nil)
+		err := svc.DeleteSession(context.Background(), "session-1")
+		assert.NoError(t, err)
+		assert.True(t, called)
 	})
 }

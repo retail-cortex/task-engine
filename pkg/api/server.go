@@ -15,13 +15,15 @@
 package api
 
 import (
+	"context"
 	_ "embed"
-	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rmcguinness/gemini_task_engine/pkg/agents"
 	"github.com/rmcguinness/gemini_task_engine/pkg/service"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"gorm.io/gorm"
 )
 
@@ -32,8 +34,9 @@ var openapiJSON []byte
 var swaggerHTML []byte
 
 type OAuthConfig struct {
-	ClientID string `toml:"client_id"`
-	Secret   string `toml:"secret"`
+	ClientID         string   `toml:"client_id"`
+	AllowedClientIDs []string `toml:"allowed_client_ids"`
+	Secret           string   `toml:"secret"`
 }
 
 type IAPConfig struct {
@@ -62,6 +65,8 @@ type Server struct {
 	operationalHandler *OperationalHandler
 	MCPHandler         *MCPHandler
 	chatHandler        *ChatHandler
+	ttsHandler         *TTSHandler
+	traceProxyHandler  *TraceProxyHandler
 }
 
 // NewServer instantiates the Gin engine and mounts all route controllers.
@@ -78,6 +83,7 @@ func NewServer(
 	engine := gin.New()
 
 	// Base middlewares
+	engine.Use(otelgin.Middleware("gemini-task-api"))
 	engine.Use(gin.Recovery())
 	engine.Use(CORSConfigMiddleware())
 
@@ -90,7 +96,8 @@ func NewServer(
 		var errSess error
 		agentsSessionService, errSess = agents.NewSessionService(db[0])
 		if errSess != nil {
-			return nil, fmt.Errorf("failed to bootstrap ADK agent session state postgres service: %w", errSess)
+			log.Printf("WARNING: Failed to bootstrap ADK agent session state postgres service: %v. Falling back to in-memory session service to allow degraded operation.", errSess)
+			agentsSessionService = agents.NewInMemorySessionService()
 		}
 	} else {
 		// Mock compatible fallback memory session module (used inside sandboxes and unit tests)
@@ -101,13 +108,18 @@ func NewServer(
 	if len(db) > 0 {
 		activeDB = db[0]
 	}
-	adminHandler := NewAdminHandler(adminService, schedulerService)
+	adminHandler := NewAdminHandler(adminService, schedulerService, taskService, shiftService, ragService)
 	operationalHandler := NewOperationalHandler(taskService, shiftService, automationService, cfg, activeDB)
 	mcpHandler, err := NewMCPHandler(taskService, ragService, shiftService, automationService)
 	if err != nil {
 		return nil, err
 	}
 	chatHandler := NewChatHandler(taskService, shiftService, ragService, automationService, agentsSessionService)
+
+	traceProxyHandler, err := NewTraceProxyHandler(context.Background())
+	if err != nil {
+		log.Printf("WARNING: Failed to initialize trace proxy handler: %v. Frontend traces will not be proxied.", err)
+	}
 
 	s := &Server{
 		cfg:                cfg,
@@ -122,6 +134,8 @@ func NewServer(
 		operationalHandler: operationalHandler,
 		MCPHandler:         mcpHandler,
 		chatHandler:        chatHandler,
+		ttsHandler:         NewTTSHandler(),
+		traceProxyHandler:  traceProxyHandler,
 	}
 
 	s.setupRoutes()
@@ -143,9 +157,17 @@ func (s *Server) setupRoutes() {
 	s.engine.GET("/liveness", s.operationalHandler.Liveness)
 	s.engine.GET("/startup", s.operationalHandler.Startup)
 
+	// Trace Proxy endpoint (for receiving frontend traces and securely forwarding them to Google Cloud Trace)
+	if s.traceProxyHandler != nil {
+		s.engine.POST("/api/v1/traces", s.traceProxyHandler.ProxyTraces)
+	}
+
 	// Global static/parameterless MCP endpoint (for standard client discovery)
 	s.engine.POST("/api/v1/mcp", UserContextMiddleware(s.adminService, s.cfg), s.MCPHandler.Handler())
 	s.engine.GET("/api/v1/mcp", UserContextMiddleware(s.adminService, s.cfg), s.MCPHandler.Handler())
+
+	// Secure Text-to-Speech endpoint
+	s.engine.POST("/api/v1/tts", UserContextMiddleware(s.adminService, s.cfg), s.ttsHandler.Synthesize)
 
 	// Admin endpoints
 	admin := s.engine.Group("/api/v1/admin", UserContextMiddleware(s.adminService, s.cfg))
@@ -200,6 +222,26 @@ func (s *Server) setupRoutes() {
 		admin.PUT("/tasks/templates/:id", s.adminHandler.UpdateTaskTemplate)
 		admin.DELETE("/tasks/templates/:id", s.adminHandler.DeleteTaskTemplate)
 		admin.GET("/tasks/templates", s.adminHandler.ListTaskTemplates)
+
+		// Task Executions CRUD
+		admin.GET("/tasks/executions", s.adminHandler.ListTaskExecutions)
+		admin.GET("/tasks/executions/:id", s.adminHandler.GetTaskExecution)
+		admin.DELETE("/tasks/executions/:id", s.adminHandler.DeleteTaskExecution)
+
+		// Shift Agent Sessions CRUD
+		admin.GET("/shifts/sessions", s.adminHandler.ListShiftSessions)
+		admin.GET("/shifts/sessions/:id", s.adminHandler.GetShiftSession)
+		admin.DELETE("/shifts/sessions/:id", s.adminHandler.DeleteShiftSession)
+
+		// SOP RAG Resources CRUD
+		admin.GET("/rag/sops", s.adminHandler.ListSOPs)
+		admin.GET("/rag/sops/:id", s.adminHandler.GetSOP)
+		admin.DELETE("/rag/sops/:id", s.adminHandler.DeleteSOP)
+
+		// SOP Ingestion Processes CRUD
+		admin.GET("/rag/processes", s.adminHandler.ListProcesses)
+		admin.GET("/rag/processes/:id", s.adminHandler.GetProcess)
+		admin.DELETE("/rag/processes/:id", s.adminHandler.DeleteProcess)
 
 		// Background Job Scheduler Controls
 		admin.POST("/scheduler/trigger", s.adminHandler.TriggerSchedulerSweep)

@@ -17,18 +17,22 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "api",
     srcs = [
+        "a2ui.go",
         "admin.go",
         "chat.go",
+        "dto.go",
         "mcp.go",
         "middleware.go",
         "operational.go",
         "server.go",
+        "telemetry.go",
+        "tts.go",
     ],
-    importpath = "github.com/rmcguinness/gemini_task_engine/pkg/api",
     embedsrcs = [
         "openapi.json",
         "swagger.html",
     ],
+    importpath = "github.com/rmcguinness/gemini_task_engine/pkg/api",
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/agents",
@@ -38,8 +42,13 @@ go_library(
         "@com_github_google_uuid//:uuid",
         "@com_github_metoro_io_mcp_golang//:mcp-golang",
         "@com_github_metoro_io_mcp_golang//transport/http",
+        "@com_google_cloud_go_texttospeech//apiv1",
+        "@com_google_cloud_go_texttospeech//apiv1/texttospeechpb",
         "@io_gorm_gorm//:gorm",
+        "@io_opentelemetry_go_contrib_instrumentation_github_com_gin_gonic_gin_otelgin//:otelgin",
         "@org_golang_google_api//idtoken",
+        "@org_golang_x_oauth2//:oauth2",
+        "@org_golang_x_oauth2//google",
     ],
 )
 
@@ -50,12 +59,16 @@ go_test(
         "mcp_test.go",
         "server_test.go",
     ],
+    local = True,
+    tags = ["local", "no-sandbox"],
     deps = [
         ":api",
         "//pkg/agents",
         "//pkg/model",
         "//pkg/service",
         "@com_github_gin_gonic_gin//:gin",
+        "@com_github_google_uuid//:uuid",
         "@com_github_stretchr_testify//assert",
+        "@io_gorm_gorm//:gorm",
     ],
 )

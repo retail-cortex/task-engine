@@ -98,6 +98,10 @@ type TaskExecutionRepository interface {
 	FindPendingTradesForUser(ctx context.Context, userID string) ([]*model.TaskTrade, error)
 	FindPendingTradeByExecution(ctx context.Context, executionID string) (*model.TaskTrade, error)
 	CreateAudit(ctx context.Context, a *model.TaskExecutionAudit) error
+	List(ctx context.Context) ([]*model.TaskExecution, error)
+	ListRange(ctx context.Context, offset, limit int) ([]*model.TaskExecution, error)
+	Delete(ctx context.Context, id string) error
+	GetSiteIDForExecution(ctx context.Context, execID string) (string, error)
 }
 
 // ShiftAgentSessionRepository manages context windows for Gemini ADK model sessions.
@@ -106,6 +110,9 @@ type ShiftAgentSessionRepository interface {
 	FindByID(ctx context.Context, id string) (*model.ShiftAgentSession, error)
 	FindByShift(ctx context.Context, assigneeID, shiftInstanceID string) (*model.ShiftAgentSession, error)
 	Update(ctx context.Context, s *model.ShiftAgentSession) error
+	List(ctx context.Context) ([]*model.ShiftAgentSession, error)
+	ListRange(ctx context.Context, offset, limit int) ([]*model.ShiftAgentSession, error)
+	Delete(ctx context.Context, id string) error
 }
 
 // SOPRepository coordinates the storage, indexing processes, and cosine distance vector searches.
@@ -118,6 +125,12 @@ type SOPRepository interface {
 	UpdateProcess(ctx context.Context, p *model.SOPProcess) error
 	CreateChunks(ctx context.Context, chunks []*model.SOPChunk) error
 	QuerySimilarity(ctx context.Context, embedding model.Float32Vector, limit int) ([]*model.SOPChunk, error)
+	List(ctx context.Context) ([]*model.SOP, error)
+	ListRange(ctx context.Context, offset, limit int) ([]*model.SOP, error)
+	Delete(ctx context.Context, id string) error
+	ListProcesses(ctx context.Context) ([]*model.SOPProcess, error)
+	ListProcessesRange(ctx context.Context, offset, limit int) ([]*model.SOPProcess, error)
+	DeleteProcess(ctx context.Context, id string) error
 }
 
 // GORM Implementations
@@ -416,7 +429,7 @@ func (r *taskExecutionRepository) Create(ctx context.Context, e *model.TaskExecu
 
 func (r *taskExecutionRepository) FindByID(ctx context.Context, id string) (*model.TaskExecution, error) {
 	var e model.TaskExecution
-	err := r.db.WithContext(ctx).Preload("Task").First(&e, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("Task").Preload("Assignee").First(&e, "id = ?", id).Error
 	return &e, err
 }
 
@@ -429,6 +442,7 @@ func (r *taskExecutionRepository) GetQueue(ctx context.Context, siteID string) (
 	// Join with event instances and schedules to filter by siteID
 	err := r.db.WithContext(ctx).
 		Preload("Task").
+		Preload("Assignee").
 		Joins("JOIN user_event_instances ON user_event_instances.id = task_executions.event_instance_id").
 		Joins("JOIN user_event_schedules ON user_event_schedules.id = user_event_instances.schedule_id").
 		Joins("JOIN events ON events.id = user_event_schedules.event_id").
@@ -442,6 +456,7 @@ func (r *taskExecutionRepository) GetOrgTasks(ctx context.Context, orgID string)
 	var list []*model.TaskExecution
 	err := r.db.WithContext(ctx).
 		Preload("Task").
+		Preload("Assignee").
 		Joins("JOIN user_event_instances ON user_event_instances.id = task_executions.event_instance_id").
 		Joins("JOIN user_event_schedules ON user_event_schedules.id = user_event_instances.schedule_id").
 		Joins("JOIN events ON events.id = user_event_schedules.event_id").
@@ -456,6 +471,7 @@ func (r *taskExecutionRepository) GetUserSiteTasks(ctx context.Context, siteID, 
 	var list []*model.TaskExecution
 	err := r.db.WithContext(ctx).
 		Preload("Task").
+		Preload("Assignee").
 		Joins("JOIN user_event_instances ON user_event_instances.id = task_executions.event_instance_id").
 		Joins("JOIN user_event_schedules ON user_event_schedules.id = user_event_instances.schedule_id").
 		Joins("JOIN events ON events.id = user_event_schedules.event_id").
@@ -495,6 +511,34 @@ func (r *taskExecutionRepository) CreateAudit(ctx context.Context, a *model.Task
 	return r.db.WithContext(ctx).Create(a).Error
 }
 
+func (r *taskExecutionRepository) List(ctx context.Context) ([]*model.TaskExecution, error) {
+	var list []*model.TaskExecution
+	err := r.db.WithContext(ctx).Preload("Task").Preload("Assignee").Find(&list).Error
+	return list, err
+}
+
+func (r *taskExecutionRepository) ListRange(ctx context.Context, offset, limit int) ([]*model.TaskExecution, error) {
+	var list []*model.TaskExecution
+	err := r.db.WithContext(ctx).Preload("Task").Preload("Assignee").Offset(offset).Limit(limit).Find(&list).Error
+	return list, err
+}
+
+func (r *taskExecutionRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&model.TaskExecution{}, "id = ?", id).Error
+}
+
+func (r *taskExecutionRepository) GetSiteIDForExecution(ctx context.Context, execID string) (string, error) {
+	var siteID string
+	err := r.db.WithContext(ctx).Table("task_executions").
+		Select("events.site_id").
+		Joins("JOIN user_event_instances ON user_event_instances.id = task_executions.event_instance_id").
+		Joins("JOIN user_event_schedules ON user_event_schedules.id = user_event_instances.schedule_id").
+		Joins("JOIN events ON events.id = user_event_schedules.event_id").
+		Where("task_executions.id = ?", execID).
+		Scan(&siteID).Error
+	return siteID, err
+}
+
 type shiftAgentSessionRepository struct {
 	db *gorm.DB
 }
@@ -521,6 +565,22 @@ func (r *shiftAgentSessionRepository) FindByShift(ctx context.Context, assigneeI
 
 func (r *shiftAgentSessionRepository) Update(ctx context.Context, s *model.ShiftAgentSession) error {
 	return r.db.WithContext(ctx).Save(s).Error
+}
+
+func (r *shiftAgentSessionRepository) List(ctx context.Context) ([]*model.ShiftAgentSession, error) {
+	var list []*model.ShiftAgentSession
+	err := r.db.WithContext(ctx).Find(&list).Error
+	return list, err
+}
+
+func (r *shiftAgentSessionRepository) ListRange(ctx context.Context, offset, limit int) ([]*model.ShiftAgentSession, error) {
+	var list []*model.ShiftAgentSession
+	err := r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&list).Error
+	return list, err
+}
+
+func (r *shiftAgentSessionRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&model.ShiftAgentSession{}, "id = ?", id).Error
 }
 
 type sopRepository struct {
@@ -571,4 +631,36 @@ func (r *sopRepository) QuerySimilarity(ctx context.Context, embedding model.Flo
 		Limit(limit).
 		Find(&chunks).Error
 	return chunks, err
+}
+
+func (r *sopRepository) List(ctx context.Context) ([]*model.SOP, error) {
+	var list []*model.SOP
+	err := r.db.WithContext(ctx).Find(&list).Error
+	return list, err
+}
+
+func (r *sopRepository) ListRange(ctx context.Context, offset, limit int) ([]*model.SOP, error) {
+	var list []*model.SOP
+	err := r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&list).Error
+	return list, err
+}
+
+func (r *sopRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&model.SOP{}, "id = ?", id).Error
+}
+
+func (r *sopRepository) ListProcesses(ctx context.Context) ([]*model.SOPProcess, error) {
+	var list []*model.SOPProcess
+	err := r.db.WithContext(ctx).Find(&list).Error
+	return list, err
+}
+
+func (r *sopRepository) ListProcessesRange(ctx context.Context, offset, limit int) ([]*model.SOPProcess, error) {
+	var list []*model.SOPProcess
+	err := r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&list).Error
+	return list, err
+}
+
+func (r *sopRepository) DeleteProcess(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&model.SOPProcess{}, "id = ?", id).Error
 }

@@ -86,6 +86,14 @@ type RAGService interface {
 
 	// CheckSOPUpdates checks ETag, Last-Modified, or SHA fingerprints to evaluate database configuration drift.
 	CheckSOPUpdates(ctx context.Context, sopID string) (bool, error)
+	GetSOPByID(ctx context.Context, id string) (*model.SOP, error)
+	ListSOPs(ctx context.Context) ([]*model.SOP, error)
+	ListSOPsRange(ctx context.Context, offset, limit int) ([]*model.SOP, error)
+	DeleteSOP(ctx context.Context, id string) error
+	GetProcessByID(ctx context.Context, id string) (*model.SOPProcess, error)
+	ListProcesses(ctx context.Context) ([]*model.SOPProcess, error)
+	ListProcessesRange(ctx context.Context, offset, limit int) ([]*model.SOPProcess, error)
+	DeleteProcess(ctx context.Context, id string) error
 }
 
 type ragService struct {
@@ -414,4 +422,36 @@ func extractSOPText(bodyBytes []byte, fileType string) string {
 		return strings.TrimSpace(re.ReplaceAllString(raw, " "))
 	}
 	return strings.TrimSpace(raw)
+}
+
+func (s *ragService) GetSOPByID(ctx context.Context, id string) (*model.SOP, error) {
+	return s.sopRepo.FindByID(ctx, id)
+}
+
+func (s *ragService) ListSOPs(ctx context.Context) ([]*model.SOP, error) {
+	return s.sopRepo.List(ctx)
+}
+
+func (s *ragService) ListSOPsRange(ctx context.Context, offset, limit int) ([]*model.SOP, error) {
+	return s.sopRepo.ListRange(ctx, offset, limit)
+}
+
+func (s *ragService) DeleteSOP(ctx context.Context, id string) error {
+	return s.sopRepo.Delete(ctx, id)
+}
+
+func (s *ragService) GetProcessByID(ctx context.Context, id string) (*model.SOPProcess, error) {
+	return s.sopRepo.FindProcessByID(ctx, id)
+}
+
+func (s *ragService) ListProcesses(ctx context.Context) ([]*model.SOPProcess, error) {
+	return s.sopRepo.ListProcesses(ctx)
+}
+
+func (s *ragService) ListProcessesRange(ctx context.Context, offset, limit int) ([]*model.SOPProcess, error) {
+	return s.sopRepo.ListProcessesRange(ctx, offset, limit)
+}
+
+func (s *ragService) DeleteProcess(ctx context.Context, id string) error {
+	return s.sopRepo.DeleteProcess(ctx, id)
 }

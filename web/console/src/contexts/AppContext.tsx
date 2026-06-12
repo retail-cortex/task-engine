@@ -13,12 +13,11 @@
 // limitations under the License.
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  ApiClient, 
-  decodeOAuthTokenClaims, 
-  BYPASS_USER_ID, 
-  SITE_ID, 
-  ResponseError 
+import {
+  ApiClient,
+  decodeOAuthTokenClaims,
+  SITE_ID,
+  ResponseError
 } from '../api/client';
 
 export interface AppContextType {
@@ -82,10 +81,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [theme]);
 
   // 1. Authentication & Google OAuth State
-  const [userToken, setUserToken] = useState<string | null>(localStorage.getItem('oauth_token'));
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('oauth_token'));
-  const [userName, setUserName] = useState<string>(() => localStorage.getItem('oauth_name') || 'Hanna');
-  const [userEmail, setUserEmail] = useState<string>(() => localStorage.getItem('oauth_email') || 'hanna@rmcguinness.altostrat.com');
+  const [userToken, setUserToken] = useState<string | null>(() => localStorage.getItem('oauth_token'));
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem('oauth_token'));
+  const [userName, setUserName] = useState<string>(() => localStorage.getItem('oauth_name') || '');
+  const [userEmail, setUserEmail] = useState<string>(() => localStorage.getItem('oauth_email') || '');
   const [userPicture, setUserPicture] = useState<string | null>(() => localStorage.getItem('oauth_picture'));
 
   const [schedulerLeader, setSchedulerLeader] = useState<boolean>(true);
@@ -110,7 +109,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('active_org_id', activeOrgID);
   }, [activeOrgID]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
-  const [activeUserId, setActiveUserId] = useState<string>(BYPASS_USER_ID);
+  const [activeUserId, setActiveUserId] = useState<string>('');
+
 
   // Synchronise React state context dynamically with stateful ApiClient singleton session contexts!
   useEffect(() => {
@@ -134,7 +134,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const handleGoogleCredentialResponse = (response: any) => {
+  const handleGoogleCredentialResponse = React.useCallback((response: any) => {
     const idToken = response.credential;
     
     const claims = decodeOAuthTokenClaims(idToken);
@@ -155,7 +155,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('oauth_token', idToken);
     setUserToken(idToken);
     setIsAuthenticated(true);
-  };
+  }, []);
 
   const handleSignOut = () => {
     localStorage.removeItem('oauth_token');
@@ -163,11 +163,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('oauth_email');
     localStorage.removeItem('oauth_picture');
 
+    // Purge the A2UI session ID to force a brand-new backend session on next login!
+    sessionStorage.removeItem('a2ui_session_id');
+
     setUserToken(null);
     setIsAuthenticated(false);
     setUserPicture(null);
-    setUserName('Hanna');
-    setUserEmail('hanna@rmcguinness.altostrat.com');
+    setUserName('');
+    setUserEmail('');
     setUserRole("SITE_ASSOCIATE");
     setUserSites([]);
     setAllSites([]);
@@ -175,19 +178,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAllOrganizations([]);
     setActiveOrgID('ALL');
     localStorage.removeItem('active_org_id');
-    setActiveUserId(BYPASS_USER_ID);
+    setActiveUserId('');
   };
 
   const syncProfileContext = () => {
     ApiClient.fetchUserProfile()
       .then((user: any) => {
-        const userId = user.ID || user.id;
+        const userId = user.id || user.ID;
         setActiveUserId(userId);
-        if (user.Name) setUserName(user.Name);
-        if (user.Email) setUserEmail(user.Email);
+        if (user.name) setUserName(user.name);
+        else if (user.Name) setUserName(user.Name);
+        
+        if (user.email) setUserEmail(user.email);
+        else if (user.Email) setUserEmail(user.Email);
 
         // Recover dynamic roles list preloaded from GORM
-        const roleNames = user.Roles ? user.Roles.map((r: any) => r.Name) : [];
+        const rolesList = user.roles || user.Roles || [];
+        const roleNames = rolesList.map((r: any) => r.name || r.Name || '');
         let activeRole = "SITE_ASSOCIATE";
         if (roleNames.includes("ADMIN")) {
           activeRole = "ADMIN";
@@ -201,14 +208,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setUserRole(activeRole);
 
         // Recover preloaded physical store sites mappings
-        const sitesList = user.Sites || [];
+        const sitesList = user.sites || user.Sites || [];
         setUserSites(sitesList);
 
         // Resolve context site target
         let initialSite = activeSiteID;
         const isAdminOrRegionManager = activeRole === "ADMIN" || activeRole === "REGION_MANAGER";
         if (sitesList.length > 0 && !isAdminOrRegionManager) {
-          const hasActive = sitesList.some((s: any) => s.id === activeSiteID || s.ID === activeSiteID);
+          const hasActive = sitesList.some((s: any) => (s.id || s.ID) === activeSiteID);
           if (!hasActive) {
             initialSite = sitesList[0].id || sitesList[0].ID;
             setActiveSiteID(initialSite);

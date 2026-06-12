@@ -38,10 +38,39 @@ multirun(
     name = "dev_server",
     commands = [
         "//cmd/server:server",
-        "//web/console:dev",
-        "//web/render-test:dev",
     ],
     jobs = 0,  # Run concurrently
+    tags = [
+        "local",
+        "no-sandbox",
+    ],
+)
+
+multirun(
+    name = "dev_portal",
+    commands = [
+        "//cmd/server:server",
+        "//web/console:dev",
+    ],
+    jobs = 0,  # Run concurrently
+    tags = [
+        "local",
+        "no-sandbox",
+    ],
+)
+
+multirun(
+    name = "dev_agent",
+    commands = [
+        "//cmd/server:dev",
+        "//cmd/task_agent:dev",
+        "//web/agentic:dev_run",
+    ],
+    jobs = 0,  # Run concurrently
+    tags = [
+        "local",
+        "no-sandbox",
+    ],
 )
 
 alias(

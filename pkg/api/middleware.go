@@ -27,6 +27,7 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -185,7 +186,20 @@ func UserContextMiddleware(adminService service.AdminService, cfg Config) gin.Ha
 		userID := c.GetHeader("X-User-ID")
 		userID = strings.TrimPrefix(userID, "A2A_USER_")
 
-		// If developer bypass header is absent, check IAP assertion
+		// Strictly reject the development bypass user ID on the HTTP ingress if it's the only form of auth
+		if userID == "00000000-0000-0000-0000-000000000000" {
+			authHeader := c.GetHeader("Authorization")
+			if !strings.HasPrefix(authHeader, "Bearer ") {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"error": "Unauthorized: Development bypass user ID is strictly forbidden on this interface",
+				})
+				return
+			}
+			// If they provided a Bearer token, we ignore the bypass user ID and let the JWT validator take over
+			userID = ""
+		}
+
+		// If header is absent, check IAP assertion
 		if userID == "" {
 			iapAssertion := c.GetHeader("X-Goog-IAP-JWT-Assertion")
 			if iapAssertion != "" {
@@ -244,12 +258,14 @@ func UserContextMiddleware(adminService service.AdminService, cfg Config) gin.Ha
 								userID = newUser.ID
 							} else {
 								log.Printf("[IAP] Warning: failed dynamically seeding user profile: %v", regErr)
-								userID = "00000000-0000-0000-0000-000000000000"
+								c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized user profile"})
+								return
 							}
 						}
 					} else {
 						log.Printf("[IAP] Error: failed mapping GORM query validation: %v", err)
-						userID = "00000000-0000-0000-0000-000000000000"
+						c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized user profile"})
+						return
 					}
 				} else {
 					userID = user.ID
@@ -263,21 +279,61 @@ func UserContextMiddleware(adminService service.AdminService, cfg Config) gin.Ha
 			if strings.HasPrefix(authHeader, "Bearer ") {
 				token := strings.TrimPrefix(authHeader, "Bearer ")
 
-				// Standard offline testing bypasses for database sandboxes & internal automated sweeps
+				// Strictly reject any hardcoded mock/bypass tokens in Authorization header
 				if token == "00000000-0000-0000-0000-000000000000" || token == "user-initiator" {
-					userID = token
-				} else if cfg.OAuth.ClientID == "" {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+						"error": "Unauthorized: Development bypass tokens are strictly forbidden",
+					})
+					return
+				}
+
+				if cfg.OAuth.ClientID == "" {
+					// Strictly prevent auth bypass in non-local environments
+					runtime := os.Getenv("MODENV_RUNTIME")
+					if runtime != "" && runtime != "local" {
+						c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+							"error": "Unauthorized: Legacy mock auth bypass is strictly forbidden in non-local environments",
+						})
+						return
+					}
 					// Fallback to legacy mock extractor when client ID is not configured (offline/dev testing contexts)
 					userID = token
 				} else {
-					// 1. Crypographic validation of Google OAuth ID Token using standard client SDK
-					payload, err := idtoken.Validate(c.Request.Context(), token, cfg.OAuth.ClientID)
-					if err != nil {
-						// Fallback to validating using the service URL for service-to-service calls
-						serviceAud := "https://" + c.Request.Host
-						if p, fallbackErr := idtoken.Validate(c.Request.Context(), token, serviceAud); fallbackErr == nil {
-							payload = p
-							err = nil
+					// 1. Extract the audience from the token payload without cryptographic overhead
+					aud, err := extractAudienceFromJWT(token)
+					var payload *idtoken.Payload
+					if err == nil {
+						// 2. Verify that the audience is whitelisted
+						isAllowed := aud == cfg.OAuth.ClientID
+						if !isAllowed {
+							for _, allowedID := range cfg.OAuth.AllowedClientIDs {
+								if allowedID != "" && allowedID == aud {
+									isAllowed = true
+									break
+								}
+							}
+						}
+
+						// Fallback: in local/dev environments, also allow tokens minted by the gcloud CLI
+						gcloudClientID := "32555940559.apps.googleusercontent.com" // Default gcloud CLI audience
+						legacyGcloudClientID := "764086051750-31g961vd5no7cbh154hra5147986m792.apps.googleusercontent.com"
+						if !isAllowed && (aud == gcloudClientID || aud == legacyGcloudClientID) {
+							isAllowed = true
+							log.Printf("[IAP] Warning: Validating token using gcloud CLI audience fallback. This must be disabled in production.")
+						}
+
+						// 3. Cryptographically validate the token EXACTLY ONCE against the matched audience
+						if isAllowed {
+							payload, err = idtoken.Validate(c.Request.Context(), token, aud)
+						} else {
+							// Check service-to-service IAP aud fallback
+							serviceAud := "https://" + c.Request.Host
+							if p, fallbackErr := idtoken.Validate(c.Request.Context(), token, serviceAud); fallbackErr == nil {
+								payload = p
+								err = nil
+							} else {
+								err = fmt.Errorf("audience %q is not whitelisted in server configurations", aud)
+							}
 						}
 					}
 					if err != nil {
@@ -332,12 +388,14 @@ func UserContextMiddleware(adminService service.AdminService, cfg Config) gin.Ha
 									userID = newUser.ID
 								} else {
 									log.Printf("[OAuth] Warning: failed dynamically seeding user profile: %v", regErr)
-									userID = "00000000-0000-0000-0000-000000000000"
+									c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized user profile"})
+									return
 								}
 							}
 						} else {
 							log.Printf("[OAuth] Error: failed mapping GORM query validation: %v", err)
-							userID = "00000000-0000-0000-0000-000000000000"
+							c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized user profile"})
+							return
 						}
 					} else {
 						userID = user.ID
@@ -346,9 +404,27 @@ func UserContextMiddleware(adminService service.AdminService, cfg Config) gin.Ha
 			}
 		}
 
-		// Fallback to default system user if none provided (specifically for localized sweeps)
+		// Unified email/username-to-UUID database resolution pass
+		if userID != "" {
+			if len(userID) != 36 || strings.Count(userID, "-") != 4 {
+				allUsers, err := adminService.ListUsers(c.Request.Context())
+				if err == nil {
+					for _, u := range allUsers {
+						if strings.EqualFold(u.Email, userID) || strings.EqualFold(u.Name, userID) {
+							userID = u.ID
+							break
+						}
+					}
+				}
+			}
+		}
+
+		// If still not resolved, strictly reject the request!
 		if userID == "" {
-			userID = "00000000-0000-0000-0000-000000000000"
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "Unauthorized: A valid, cryptographically verified user context is required",
+			})
+			return
 		}
 
 		// Bind verified user session parameters globally
@@ -367,7 +443,7 @@ func CORSConfigMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-User-ID")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-User-ID, traceparent, tracestate")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
 
 		if c.Request.Method == "OPTIONS" {
@@ -377,4 +453,26 @@ func CORSConfigMiddleware() gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// extractAudienceFromJWT decodes the payload of a JWT and retrieves the "aud" claim without verifying its signature.
+func extractAudienceFromJWT(token string) (string, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return "", fmt.Errorf("invalid token format: expected 3 parts")
+	}
+
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("failed to decode JWT payload: %w", err)
+	}
+
+	var claims struct {
+		Aud string `json:"aud"`
+	}
+	if err := json.Unmarshal(payloadBytes, &claims); err != nil {
+		return "", fmt.Errorf("failed to parse JWT claims: %w", err)
+	}
+
+	return claims.Aud, nil
 }

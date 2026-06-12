@@ -28,6 +28,7 @@ type TaskExecution struct {
 	SubjectExecutionID      *string    `gorm:"column:subject_execution_id;type:uuid;index;default:null"`
 	InitiatorID             *string    `gorm:"column:initiator_id;type:uuid;index;default:null"`
 	AssigneeID              *string    `gorm:"column:assignee_id;type:uuid;index;default:null"`
+	Assignee                *User      `gorm:"foreignKey:AssigneeID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 	EventInstanceID         string     `gorm:"column:event_instance_id;type:uuid;not null;index;index:idx_task_executions_queue,priority:1"`
 	Description             string     `gorm:"type:text;default:null"`
 	Status                  string     `gorm:"type:varchar(50);not null;default:'PENDING';index:idx_task_executions_status_locked_at,priority:1"`

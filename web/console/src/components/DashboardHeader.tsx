@@ -91,7 +91,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
 
   const getSiteOptions = () => {
     let list = (userRole === 'ADMIN' || userRole === 'REGION_MANAGER') ? allSites : userSites;
-    
+
     // Filter sites by selected active organization context!
     if (activeOrgID && activeOrgID !== 'ALL') {
       list = list.filter((s: any) => (s.OrganizationID || s.organization_id) === activeOrgID);
@@ -111,7 +111,7 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
     <header className="dashboard-header">
       <div className="brand-section">
         <div className="pulse-indicator"></div>
-        <h1 className="brand-title">NEXUS INTEGRATION ENGINE HUB</h1>
+        <h1 className="brand-title">Gemini Task Hub</h1>
         {/* Organization Selector (Admin/Region Manager Only) */}
         {(userRole === 'ADMIN' || userRole === 'REGION_MANAGER') && allOrganizations.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
@@ -303,10 +303,10 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                   <span>{theme === 'light' ? 'Light Theme' : 'Dark Theme'}</span>
                 </div>
                 <label className="switch-control" onClick={(e) => e.stopPropagation()}>
-                  <input 
-                    type="checkbox" 
-                    checked={theme === 'dark'} 
-                    onChange={() => setTheme(t => (t === 'light' ? 'dark' : 'light'))} 
+                  <input
+                    type="checkbox"
+                    checked={theme === 'dark'}
+                    onChange={() => setTheme(t => (t === 'light' ? 'dark' : 'light'))}
                   />
                   <span className="switch-slider"></span>
                 </label>

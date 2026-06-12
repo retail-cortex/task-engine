@@ -337,5 +337,70 @@ def test_normalize_card_to_a2ui_messages_dropdown_nested():
     assert "Button" in btn["component"]
 
 
+def test_custom_convert_event_to_a2a_message_with_cached_card_markdown():
+    from unittest.mock import MagicMock
+    from a2ui_transpiler import custom_convert_event_to_a2a_message
+    import builtins
+
+    # Seed the cache with markdown-fenced card payload, mimicking Go MCP return format
+    builtins.CACHED_A2UI_CARD = """```json
+    {
+      "type": "card",
+      "title": "TEST CACHED CARD",
+      "children": []
+    }
+    ```"""
+
+    mock_part = MagicMock()
+    mock_part.text = "Here are the details: [A2UI_CARD_TASK_DETAILS_CACHED]"
+
+    mock_event = MagicMock()
+    mock_event.content.parts = [mock_part]
+
+    mock_context = MagicMock()
+
+    res = custom_convert_event_to_a2a_message(mock_event, mock_context)
+
+    # Clean up cache
+    if hasattr(builtins, "CACHED_A2UI_CARD"):
+        delattr(builtins, "CACHED_A2UI_CARD")
+
+    assert res is not None
+    assert len(res.parts) == 2
+    assert isinstance(res.parts[0].root, a2a_types.DataPart)
+    
+    # Verify the cached card was parsed and normalized successfully
+    assert res.parts[0].root.data["beginRendering"]["root"] == "card_1"
+    assert res.parts[0].root.metadata == {"mimeType": "application/json+a2ui"}
+    
+    assert isinstance(res.parts[1].root, a2a_types.DataPart)
+    assert "surfaceUpdate" in res.parts[1].root.data
+    assert res.parts[1].root.metadata == {"mimeType": "application/json+a2ui"}
+
+
+def test_normalize_card_to_a2ui_messages_checkbox():
+    card = {
+        "type": "card",
+        "title": "CHECKBOX TEST",
+        "children": [
+            {
+                "type": "checkbox",
+                "label": "I agree to the terms",
+                "value": "/form/agreedToTerms"
+            }
+        ]
+    }
+    
+    messages = normalize_card_to_a2ui_messages(card)
+    assert len(messages) == 2
+    components = messages[1]["surfaceUpdate"]["components"]
+    
+    checkbox = next(c for c in components if "CheckBox" in c["component"])
+    assert checkbox["component"]["CheckBox"]["label"] == {"literalString": "I agree to the terms"}
+    assert checkbox["component"]["CheckBox"]["value"] == {"path": "/form/agreedToTerms"}
+
+
+
+
 
 

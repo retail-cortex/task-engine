@@ -32,6 +32,9 @@ type MockTaskExecutionRepository struct {
 	FindTradeByIDFunc            func(ctx context.Context, id string) (*model.TaskTrade, error)
 	UpdateTradeFunc              func(ctx context.Context, t *model.TaskTrade) error
 	FindPendingTradesForUserFunc func(ctx context.Context, userID string) ([]*model.TaskTrade, error)
+	ListFunc                     func(ctx context.Context) ([]*model.TaskExecution, error)
+	ListRangeFunc                func(ctx context.Context, offset, limit int) ([]*model.TaskExecution, error)
+	DeleteFunc                   func(ctx context.Context, id string) error
 }
 
 func (m *MockTaskExecutionRepository) FindByID(ctx context.Context, id string) (*model.TaskExecution, error) {
@@ -74,6 +77,27 @@ func (m *MockTaskExecutionRepository) FindPendingTradesForUser(ctx context.Conte
 		return m.FindPendingTradesForUserFunc(ctx, userID)
 	}
 	return nil, nil
+}
+
+func (m *MockTaskExecutionRepository) List(ctx context.Context) ([]*model.TaskExecution, error) {
+	if m.ListFunc != nil {
+		return m.ListFunc(ctx)
+	}
+	return nil, nil
+}
+
+func (m *MockTaskExecutionRepository) ListRange(ctx context.Context, offset, limit int) ([]*model.TaskExecution, error) {
+	if m.ListRangeFunc != nil {
+		return m.ListRangeFunc(ctx, offset, limit)
+	}
+	return nil, nil
+}
+
+func (m *MockTaskExecutionRepository) Delete(ctx context.Context, id string) error {
+	if m.DeleteFunc != nil {
+		return m.DeleteFunc(ctx, id)
+	}
+	return nil
 }
 
 func TestTaskService_ProposeTrade(t *testing.T) {
@@ -333,5 +357,69 @@ func TestTaskService_RejectTrade(t *testing.T) {
 
 		assert.NotNil(t, updatedTrade)
 		assert.Equal(t, "REJECTED", updatedTrade.Status)
+	})
+}
+
+func TestTaskService_CRUD(t *testing.T) {
+	t.Run("GetTaskExecutionByID success", func(t *testing.T) {
+		expected := &model.TaskExecution{ID: "exec-1", Status: "PENDING"}
+		mockRepo := &MockTaskExecutionRepository{
+			FindByIDFunc: func(ctx context.Context, id string) (*model.TaskExecution, error) {
+				assert.Equal(t, "exec-1", id)
+				return expected, nil
+			},
+		}
+		svc := NewTaskService(mockRepo, nil)
+		res, err := svc.GetTaskExecutionByID(context.Background(), "exec-1")
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+	})
+
+	t.Run("ListTaskExecutions success", func(t *testing.T) {
+		expected := []*model.TaskExecution{
+			{ID: "exec-1", Status: "PENDING"},
+			{ID: "exec-2", Status: "COMPLETED"},
+		}
+		mockRepo := &MockTaskExecutionRepository{
+			ListFunc: func(ctx context.Context) ([]*model.TaskExecution, error) {
+				return expected, nil
+			},
+		}
+		svc := NewTaskService(mockRepo, nil)
+		res, err := svc.ListTaskExecutions(context.Background())
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+	})
+
+	t.Run("ListTaskExecutionsRange success", func(t *testing.T) {
+		expected := []*model.TaskExecution{
+			{ID: "exec-2", Status: "COMPLETED"},
+		}
+		mockRepo := &MockTaskExecutionRepository{
+			ListRangeFunc: func(ctx context.Context, offset, limit int) ([]*model.TaskExecution, error) {
+				assert.Equal(t, 1, offset)
+				assert.Equal(t, 10, limit)
+				return expected, nil
+			},
+		}
+		svc := NewTaskService(mockRepo, nil)
+		res, err := svc.ListTaskExecutionsRange(context.Background(), 1, 10)
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+	})
+
+	t.Run("DeleteTaskExecution success", func(t *testing.T) {
+		called := false
+		mockRepo := &MockTaskExecutionRepository{
+			DeleteFunc: func(ctx context.Context, id string) error {
+				assert.Equal(t, "exec-1", id)
+				called = true
+				return nil
+			},
+		}
+		svc := NewTaskService(mockRepo, nil)
+		err := svc.DeleteTaskExecution(context.Background(), "exec-1")
+		assert.NoError(t, err)
+		assert.True(t, called)
 	})
 }

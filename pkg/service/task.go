@@ -41,6 +41,11 @@ type TaskService interface {
 	ListActiveSites(ctx context.Context) ([]*model.Site, error)
 	GetSiteLocations(ctx context.Context, siteID string) ([]*model.Location, error)
 	GetLocationByID(ctx context.Context, id string) (*model.Location, error)
+	GetTaskExecutionByID(ctx context.Context, id string) (*model.TaskExecution, error)
+	GetSiteIDForExecution(ctx context.Context, execID string) (string, error)
+	ListTaskExecutions(ctx context.Context) ([]*model.TaskExecution, error)
+	ListTaskExecutionsRange(ctx context.Context, offset, limit int) ([]*model.TaskExecution, error)
+	DeleteTaskExecution(ctx context.Context, id string) error
 }
 
 type taskService struct {
@@ -87,11 +92,45 @@ func (s *taskService) UpdateStatus(ctx context.Context, executionID, status, che
 		exec.CompletedAt = &now
 	}
 	if checklistState != "" {
-		exec.ChecklistState = model.JSONB([]byte(checklistState))
+		// Try parsing as a single-step delta first to support out-of-order execution safely
+		var delta struct {
+			Step      int  `json:"step"`
+			Completed bool `json:"completed"`
+		}
+		if err := json.Unmarshal([]byte(checklistState), &delta); err == nil && delta.Step > 0 {
+			// Load and parse existing checklist from DB
+			var currentChecklist []struct {
+				Step      int    `json:"step"`
+				Action    string `json:"action"`
+				Required  bool   `json:"required"`
+				Completed bool   `json:"completed"`
+			}
+			if len(exec.ChecklistState) > 0 {
+				if err := json.Unmarshal(exec.ChecklistState, &currentChecklist); err == nil {
+					// Apply the delta to the matched step only
+					updated := false
+					for idx, step := range currentChecklist {
+						if step.Step == delta.Step {
+							currentChecklist[idx].Completed = delta.Completed
+							updated = true
+							break
+						}
+					}
+					if updated {
+						updatedBytes, _ := json.Marshal(currentChecklist)
+						exec.ChecklistState = model.JSONB(updatedBytes)
+					}
+				}
+			}
+		} else {
+			// Fallback: overwrite the entire checklist state (for full array updates)
+			exec.ChecklistState = model.JSONB([]byte(checklistState))
+		}
 	}
 
 	return s.execRepo.Update(ctxWithUser, exec)
 }
+
 
 func (s *taskService) OverrideAssetConstraint(ctx context.Context, executionID, assetID, justification, userID string) error {
 	ctxWithUser := context.WithValue(ctx, "userID", userID)
@@ -308,36 +347,61 @@ func (s *taskService) ClaimTask(ctx context.Context, executionID, userID string,
 		return fmt.Errorf("failed to find task execution: %w", err)
 	}
 
-	if exec.Status != "TRADE_PENDING" {
-		return errors.New("task is not pending a trade")
+	// Support claiming any open task (not COMPLETED)
+	if exec.Status == "COMPLETED" {
+		return fmt.Errorf("task is not in a claimable state (current status: %s)", exec.Status)
 	}
 
-	// 1. Find the active pending trade record for this execution
-	trade, err := s.execRepo.FindPendingTradeByExecution(ctxWithUser, executionID)
-	if err != nil {
-		return fmt.Errorf("failed to find pending trade record for this execution: %w", err)
-	}
+	// If it is a trade, we validate and approve the trade record
+	var trade *model.TaskTrade
+	if exec.Status == "TRADE_PENDING" {
+		// 1. Find the active pending trade record for this execution
+		var err error
+		trade, err = s.execRepo.FindPendingTradeByExecution(ctxWithUser, executionID)
+		if err != nil {
+			return fmt.Errorf("failed to find pending trade record for this execution: %w", err)
+		}
 
-	// 2. Validate if user is authorized to take this task:
-	// - If the user is the original initiator of the trade swap (trade.InitiatorID == userID), they are allowed to take it back.
-	// - OR, if the task does not enforce target roles (TargetRoleID is nil or empty).
-	// - OR, if the user possesses the TargetRoleID.
-	isAuthorized := false
-	if trade.InitiatorID == userID {
-		isAuthorized = true
-	} else if exec.Task.TargetRoleID == nil || *exec.Task.TargetRoleID == "" {
-		isAuthorized = true
-	} else {
-		for _, rID := range userRoleIDs {
-			if rID == *exec.Task.TargetRoleID {
-				isAuthorized = true
-				break
+		// 2. Validate if user is authorized to take this task:
+		// - If the user is the original initiator of the trade swap (trade.InitiatorID == userID), they are allowed to take it back.
+		// - OR, if the task does not enforce target roles (TargetRoleID is nil or empty).
+		// - OR, if the user possesses the TargetRoleID.
+		isAuthorized := false
+		if trade.InitiatorID == userID {
+			isAuthorized = true
+		} else if exec.Task.TargetRoleID == nil || *exec.Task.TargetRoleID == "" {
+			isAuthorized = true
+		} else {
+			for _, rID := range userRoleIDs {
+				if rID == *exec.Task.TargetRoleID {
+					isAuthorized = true
+					break
+				}
 			}
 		}
-	}
 
-	if !isAuthorized {
-		return errors.New("unauthorized: you do not possess the eligible operational role required to take this task")
+		if !isAuthorized {
+			return errors.New("unauthorized: you do not possess the eligible operational role required to take this task")
+		}
+	} else {
+		// If it is a standard open task, we validate:
+
+		// - And the user must possess the required TargetRoleID if set.
+		isAuthorized := false
+		if exec.Task.TargetRoleID == nil || *exec.Task.TargetRoleID == "" {
+			isAuthorized = true
+		} else {
+			for _, rID := range userRoleIDs {
+				if rID == *exec.Task.TargetRoleID {
+					isAuthorized = true
+					break
+				}
+			}
+		}
+
+		if !isAuthorized {
+			return errors.New("unauthorized: you do not possess the eligible operational role required to claim this task")
+		}
 	}
 
 	// 3. Reassign assignee to the claiming user
@@ -367,10 +431,14 @@ func (s *taskService) ClaimTask(ctx context.Context, executionID, userID string,
 		return fmt.Errorf("failed to update task execution assignee: %w", err)
 	}
 
-	// 6. Close the trade record
-	trade.Status = "APPROVED"
-	trade.ProposedAssigneeID = userID
-	return s.execRepo.UpdateTrade(ctxWithUser, trade)
+	// 6. If it was a trade, close the trade record
+	if trade != nil {
+		trade.Status = "APPROVED"
+		trade.ProposedAssigneeID = userID
+		return s.execRepo.UpdateTrade(ctxWithUser, trade)
+	}
+
+	return nil
 }
 
 func (s *taskService) GetSiteLocations(ctx context.Context, siteID string) ([]*model.Location, error) {
@@ -387,4 +455,24 @@ func (s *taskService) GetSiteLocations(ctx context.Context, siteID string) ([]*m
 
 func (s *taskService) GetLocationByID(ctx context.Context, id string) (*model.Location, error) {
 	return s.siteRepo.FindLocationByID(ctx, id)
+}
+
+func (s *taskService) GetTaskExecutionByID(ctx context.Context, id string) (*model.TaskExecution, error) {
+	return s.execRepo.FindByID(ctx, id)
+}
+
+func (s *taskService) GetSiteIDForExecution(ctx context.Context, execID string) (string, error) {
+	return s.execRepo.GetSiteIDForExecution(ctx, execID)
+}
+
+func (s *taskService) ListTaskExecutions(ctx context.Context) ([]*model.TaskExecution, error) {
+	return s.execRepo.List(ctx)
+}
+
+func (s *taskService) ListTaskExecutionsRange(ctx context.Context, offset, limit int) ([]*model.TaskExecution, error) {
+	return s.execRepo.ListRange(ctx, offset, limit)
+}
+
+func (s *taskService) DeleteTaskExecution(ctx context.Context, id string) error {
+	return s.execRepo.Delete(ctx, id)
 }

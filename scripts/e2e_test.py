@@ -35,7 +35,7 @@ subprocess.run([venv_playwright, "install", "chromium"], check=True)
 
 from playwright.sync_api import sync_playwright, expect
 
-BASE_URL = "http://localhost:5173"
+BASE_URL = "http://localhost:5175"
 
 def run_tests():
     print("\n==================================================")
@@ -72,7 +72,7 @@ def run_tests():
             page.wait_for_timeout(3000) # Wait for React profile hydration and GORM fetches
             
             # Assert we are on the main dashboard (brand-title swaps to HUB)
-            expect(page.locator("h1.brand-title")).to_have_text("NEXUS INTEGRATION ENGINE HUB")
+            expect(page.locator("h1.brand-title")).to_have_text("Gemini Task Hub")
             print("   ✅ SUCCESS: Bypassed Google SSO and authenticated successfully as Ryan!")
 
             # ----------------------------------------------------
