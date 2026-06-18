@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_go//go:def.bzl", "go_library", "go_test")
+load("@rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "api",
@@ -27,6 +27,7 @@ go_library(
         "server.go",
         "telemetry.go",
         "tts.go",
+        "voice_translation.go",
     ],
     embedsrcs = [
         "openapi.json",
@@ -37,6 +38,7 @@ go_library(
     deps = [
         "//pkg/agents",
         "//pkg/model",
+        "//pkg/persistence",
         "//pkg/service",
         "@com_github_gin_gonic_gin//:gin",
         "@com_github_google_uuid//:uuid",
@@ -51,4 +53,3 @@ go_library(
         "@org_golang_x_oauth2//google",
     ],
 )
-

@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -19,6 +22,19 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // Load local .env properties file at compile-time
+        val envFile = rootProject.file(".env")
+        val envProperties = Properties()
+        if (envFile.exists()) {
+            val fis = FileInputStream(envFile)
+            envProperties.load(fis)
+            fis.close()
+        }
+        val apiBaseUrl = envProperties.getProperty("API_BASE_URL") ?: "http://10.0.2.2:8080/"
+
+        // Inject variables into BuildConfig class
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
 
     buildTypes {
@@ -39,6 +55,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"

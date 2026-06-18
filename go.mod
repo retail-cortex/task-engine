@@ -18,7 +18,9 @@ go 1.26.3
 
 require (
 	cloud.google.com/go/alloydbconn v1.13.0
+	cloud.google.com/go/speech v1.35.0
 	cloud.google.com/go/texttospeech v1.21.0
+	cloud.google.com/go/translate v1.17.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.33.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/google/uuid v1.6.0
@@ -30,6 +32,7 @@ require (
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/sdk v1.44.0
 	golang.org/x/oauth2 v0.36.0
+	golang.org/x/text v0.37.0
 	google.golang.org/api v0.280.0
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.1
@@ -42,7 +45,9 @@ require (
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/longrunning v1.0.0 // indirect
+	cloud.google.com/go/speech v1.35.0 // indirect
 	cloud.google.com/go/trace v1.16.0 // indirect
+	cloud.google.com/go/translate v1.17.0 // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.57.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect

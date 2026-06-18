@@ -32,6 +32,7 @@ build/
 
 # Environment Configurations
 .env.*.toml
+apps/gtasks/.env
 
 scratch
 .bazel-deploy-cache/

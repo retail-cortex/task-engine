@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_go//go:def.bzl", "go_library", "go_test")
+load("@rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "service",
@@ -23,6 +23,7 @@ go_library(
         "scheduler.go",
         "shift.go",
         "task.go",
+        "translation.go",
     ],
     importpath = "github.com/rmcguinness/gemini_task_engine/pkg/service",
     visibility = ["//visibility:public"],
@@ -30,7 +31,13 @@ go_library(
         "//pkg/model",
         "//pkg/persistence",
         "@com_github_google_uuid//:uuid",
+        "@com_google_cloud_go_speech//apiv1",
+        "@com_google_cloud_go_speech//apiv1/speechpb",
+        "@com_google_cloud_go_texttospeech//apiv1",
+        "@com_google_cloud_go_texttospeech//apiv1/texttospeechpb",
+        "@com_google_cloud_go_translate//:translate",
         "@io_gorm_gorm//:gorm",
+        "@org_golang_x_oauth2//google",
+        "@org_golang_x_text//language",
     ],
 )
-

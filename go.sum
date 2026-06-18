@@ -17,10 +17,14 @@ cloud.google.com/go/longrunning v1.0.0 h1:lwzWEYD8+NkYV7dhexOz6kmlvajZA70+bW/xMh
 cloud.google.com/go/longrunning v1.0.0/go.mod h1:8nqFBPOO1U/XkhWl0I19AMZEphrHi73VNABIpKYaTwM=
 cloud.google.com/go/monitoring v1.29.0 h1:AHhDsFaSax1/4k+qlIDX/SDGe6hggnfXJ9dkgD9qBPY=
 cloud.google.com/go/monitoring v1.29.0/go.mod h1:72NOVjJXHY/HBfoLT0+qlCZBT059+9VXLeAnL2PeeVM=
+cloud.google.com/go/speech v1.35.0 h1:jxWycO5+PfhBWxqnuJNDjNMi85zRK2Jcb4CVhOz6JcA=
+cloud.google.com/go/speech v1.35.0/go.mod h1:shnf33sZbGnQQZyek1fdLOR5rRKV6D3jsNqpqyijvj8=
 cloud.google.com/go/texttospeech v1.21.0 h1:u1Zvij2JgV3Vci3M2YrotjqnmW4px0uhoVoW8Vv6IP0=
 cloud.google.com/go/texttospeech v1.21.0/go.mod h1:p/UVJILAo/S5vsJaWZVdDRzNzA7wXIA+hTACvpMeOBk=
 cloud.google.com/go/trace v1.16.0 h1:GmQovzFc5F0CNfl0VLgL64aoTtu7xsM0YajW2GlG9+E=
 cloud.google.com/go/trace v1.16.0/go.mod h1:r+bdAn16dKLSV1G2D5v3e58IlQlizfxWrUfjx7kM7X0=
+cloud.google.com/go/translate v1.17.0 h1:6ecjspRHAOHU+x+e4HOK/2o+bzw7KHwu//eyLVf4TuM=
+cloud.google.com/go/translate v1.17.0/go.mod h1:3mErnHTQBu9yeLiL35K0HBBuaM6Vk2fD/vyWFz790VU=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=

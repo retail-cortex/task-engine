@@ -21,6 +21,7 @@ import com.google.gtasks.ui.screens.context.ContextScreen
 import com.google.gtasks.ui.screens.detail.TaskDetailScreen
 import com.google.gtasks.ui.screens.login.LoginScreen
 import com.google.gtasks.ui.screens.tasks.TaskListScreen
+import com.google.gtasks.ui.screens.translate.TranslationScreen
 import com.google.gtasks.ui.theme.GTasksTheme
 
 class MainActivity : ComponentActivity() {
@@ -108,6 +109,9 @@ fun GTasksNavigation(appContainer: com.google.gtasks.di.AppContainer) {
                 onChatClick = {
                     navController.navigate("chat")
                 },
+                onTranslateClick = {
+                    navController.navigate("translate")
+                },
                 onLogout = {
                     appContainer.authRepository.logout()
                 },
@@ -138,6 +142,16 @@ fun GTasksNavigation(appContainer: com.google.gtasks.di.AppContainer) {
         // Route 5: Conversational Coach Chat (Hanna Coach with native A2UI cards!)
         composable("chat") {
             ChatScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        // Route 6: Real-time Voice Translation Screen
+        composable("translate") {
+            TranslationScreen(
                 onBackClick = {
                     navController.popBackStack()
                 },

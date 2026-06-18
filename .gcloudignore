@@ -29,6 +29,21 @@ build/
 .cache/
 .pnpm-debug.log*
 
+# Ignore Python virtual environment
+.venv/
+
+# Ignore Android & Gradle build files
+.gradle/
+**/.gradle/
+**/build/
+# Ignore heavy machine learning models (Android local edge models)
+third_party/gemma/
+
+# Ignore scratch and temporary directories
+scratch/
+scratch
+db_loader
+
 # Ignore Terraform files (keep secrets out of builds)
 *passwords_registry.csv
 *.tfstate
@@ -37,4 +52,3 @@ build/
 .terraform.lock.hcl
 *.log
 tf.log
-scratch/

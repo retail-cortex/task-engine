@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Storefront
@@ -52,6 +53,7 @@ import com.google.gtasks.ui.theme.glassmorphic
 fun TaskListScreen(
     onTaskClick: (String) -> Unit,
     onChatClick: () -> Unit,
+    onTranslateClick: () -> Unit,
     onLogout: () -> Unit,
     onChangeSite: () -> Unit,
     modifier: Modifier = Modifier,
@@ -256,27 +258,56 @@ fun TaskListScreen(
             }
         },
         floatingActionButton = {
-            // Chat Coach Floating Trigger (Hanna Coach)
-            FloatingActionButton(
-                onClick = onChatClick,
-                containerColor = GTasksTheme.colors.colorSecondary,
-                contentColor = Color.White,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.padding(8.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // Real-time Voice Translation Floating Trigger
+                FloatingActionButton(
+                    onClick = onTranslateClick,
+                    containerColor = GTasksTheme.colors.colorPrimary,
+                    contentColor = Color.White,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.padding(vertical = 8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = "Sparkle Chat Icon"
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Chat Coach",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Translate,
+                            contentDescription = "Translate Icon"
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Translate",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+
+                // Chat Coach Floating Trigger (Hanna Coach)
+                FloatingActionButton(
+                    onClick = onChatClick,
+                    containerColor = GTasksTheme.colors.colorSecondary,
+                    contentColor = Color.White,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.padding(vertical = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "Sparkle Chat Icon"
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Chat Coach",
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
                 }
             }
         },

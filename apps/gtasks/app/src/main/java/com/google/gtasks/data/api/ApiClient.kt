@@ -2,6 +2,7 @@ package com.google.gtasks.data.api
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.google.gtasks.BuildConfig
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -14,8 +15,8 @@ class ApiClient(private val context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("gtasks_prefs", Context.MODE_PRIVATE)
 
     companion object {
-        // Standard Android Emulator loopback to host machine's localhost where Go API server runs
-        private const val DEFAULT_BASE_URL = "http://10.0.2.2:8080/"
+        // Load the build-time environment-injected API Base URL!
+        private val DEFAULT_BASE_URL = BuildConfig.API_BASE_URL
         private const val PREF_JWT_TOKEN = "jwt_token"
         private const val PREF_BASE_URL = "api_base_url"
     }

@@ -22,6 +22,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/rmcguinness/gemini_task_engine/pkg/agents"
+	"github.com/rmcguinness/gemini_task_engine/pkg/persistence"
 	"github.com/rmcguinness/gemini_task_engine/pkg/service"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"gorm.io/gorm"
@@ -62,11 +63,12 @@ type Server struct {
 	automationService  service.AutomationService
 	schedulerService   service.SchedulerService
 	adminHandler       *AdminHandler
-	operationalHandler *OperationalHandler
-	MCPHandler         *MCPHandler
-	chatHandler        *ChatHandler
-	ttsHandler         *TTSHandler
-	traceProxyHandler  *TraceProxyHandler
+	operationalHandler  *OperationalHandler
+	MCPHandler          *MCPHandler
+	chatHandler         *ChatHandler
+	ttsHandler          *TTSHandler
+	voiceTransHandler   *VoiceTranslationHandler
+	traceProxyHandler   *TraceProxyHandler
 }
 
 // NewServer instantiates the Gin engine and mounts all route controllers.
@@ -121,6 +123,18 @@ func NewServer(
 		log.Printf("WARNING: Failed to initialize trace proxy handler: %v. Frontend traces will not be proxied.", err)
 	}
 
+	// Instantiate voice translation repository, service, and handler
+	var voiceTransHandler *VoiceTranslationHandler
+	if activeDB != nil {
+		userRepo := persistence.NewUserRepository(activeDB)
+		transService, errSvc := service.NewTranslationService(userRepo)
+		if errSvc != nil {
+			log.Printf("WARNING: Failed to initialize TranslationService: %v. Voice translation will be disabled.", errSvc)
+		} else {
+			voiceTransHandler = NewVoiceTranslationHandler(userRepo, transService)
+		}
+	}
+
 	s := &Server{
 		cfg:                cfg,
 		engine:             engine,
@@ -135,6 +149,7 @@ func NewServer(
 		MCPHandler:         mcpHandler,
 		chatHandler:        chatHandler,
 		ttsHandler:         NewTTSHandler(),
+		voiceTransHandler:  voiceTransHandler,
 		traceProxyHandler:  traceProxyHandler,
 	}
 
@@ -168,6 +183,22 @@ func (s *Server) setupRoutes() {
 
 	// Secure Text-to-Speech endpoint
 	s.engine.POST("/api/v1/tts", UserContextMiddleware(s.adminService, s.cfg), s.ttsHandler.Synthesize)
+
+	// Profile and Translation REST API routes
+	if s.voiceTransHandler != nil {
+		v1 := s.engine.Group("/api/v1", UserContextMiddleware(s.adminService, s.cfg))
+		{
+			v1.GET("/profile/:id", s.voiceTransHandler.GetProfile)
+			v1.POST("/profile/:id", s.voiceTransHandler.SaveProfile)
+			v1.PUT("/profile/:id", s.voiceTransHandler.UpdateProfile)
+			v1.POST("/profile/:id/voice/clone", s.voiceTransHandler.CloneVoice)
+
+			v1.POST("/translate/talk", s.voiceTransHandler.TranslateTalk)
+			v1.POST("/translate/listen", s.voiceTransHandler.TranslateListen)
+			v1.GET("/translate/voices", s.voiceTransHandler.ListVoices)
+			v1.POST("/translate/preview", s.voiceTransHandler.PreviewVoice)
+		}
+	}
 
 	// Admin endpoints
 	admin := s.engine.Group("/api/v1/admin", UserContextMiddleware(s.adminService, s.cfg))

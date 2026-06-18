@@ -4,6 +4,9 @@ import com.google.gtasks.data.model.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import retrofit2.http.*
+import okhttp3.RequestBody
+import okhttp3.ResponseBody
+import retrofit2.Response
 
 interface ApiInterface {
 
@@ -94,7 +97,87 @@ interface ApiInterface {
         @Path("orgId") orgId: String,
         @Path("siteId") siteId: String
     ): List<UserDTO>
+
+    @GET("api/v1/profile/{id}")
+    suspend fun getProfile(
+        @Path("id") id: String
+    ): ProfileDTO
+
+    @POST("api/v1/profile/{id}")
+    suspend fun saveProfile(
+        @Path("id") id: String,
+        @Body profile: ProfileDTO
+    ): ProfileDTO
+
+    @PUT("api/v1/profile/{id}")
+    suspend fun updateProfile(
+        @Path("id") id: String,
+        @Body profile: ProfileDTO
+    ): ProfileDTO
+
+    @POST("api/v1/profile/{id}/voice/clone")
+    suspend fun cloneVoice(
+        @Path("id") id: String,
+        @Body audio: RequestBody
+    ): CloneVoiceResponse
+
+    @POST("api/v1/translate/talk")
+    suspend fun translateTalk(
+        @Query("associate_id") associateId: String,
+        @Query("target_language") targetLanguage: String,
+        @Body audio: RequestBody
+    ): Response<ResponseBody>
+
+    @POST("api/v1/translate/listen")
+    suspend fun translateListen(
+        @Query("associate_id") associateId: String,
+        @Query("gender") gender: String,
+        @Query("target_language") targetLanguage: String,
+        @Body audio: RequestBody
+    ): Response<ResponseBody>
+
+    @GET("api/v1/translate/voices")
+    suspend fun listVoices(): List<HDVoice>
+
+    @POST("api/v1/translate/preview")
+    suspend fun previewVoice(
+        @Body body: PreviewVoiceRequest
+    ): Response<ResponseBody>
 }
+
+// Request DTOs
+
+@Serializable
+data class PreviewVoiceRequest(
+    @SerialName("voice_name") val voiceName: String,
+    @SerialName("language_code") val languageCode: String,
+    val text: String = ""
+)
+
+@Serializable
+data class ProfileDTO(
+    val id: String,
+    val email: String,
+    val name: String,
+    @SerialName("preferred_language_id") val preferredLanguageId: String?,
+    @SerialName("voice_gender_preference") val voiceGenderPreference: String,
+    @SerialName("voice_name_preference") val voiceNamePreference: String,
+    @SerialName("cloned_voice_key") val clonedVoiceKey: String
+)
+
+@Serializable
+data class HDVoice(
+    val name: String,
+    @SerialName("language_code") val languageCode: String,
+    val gender: String,
+    @SerialName("quality_class") val qualityClass: String
+)
+
+@Serializable
+data class CloneVoiceResponse(
+    val status: String,
+    @SerialName("cloned_voice_key") val clonedVoiceKey: String
+)
 
 // Request DTOs
 

@@ -30,6 +30,9 @@ type User struct {
 	ConsentRecording []byte              `gorm:"type:bytea;default:null"`
 	PreferredLanguageID *string             `gorm:"type:uuid;index;default:null"`
 	PreferredLanguage   *Language           `gorm:"foreignKey:PreferredLanguageID;constraint:OnDelete:SET NULL"`
+	VoiceGenderPreference string            `gorm:"type:varchar(50);not null;default:'FEMALE'"`
+	VoiceNamePreference   string            `gorm:"type:varchar(100);not null;default:'en-US-Journey-F'"`
+	ClonedVoiceKey        string            `gorm:"type:varchar(255);not null;default:''"`
 	CreatedAt        time.Time           `gorm:"not null;default:now()"`
 	UpdatedAt      time.Time           `gorm:"not null;default:now()"`
 	Version        int                 `gorm:"not null;default:1"`

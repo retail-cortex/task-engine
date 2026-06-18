@@ -6,6 +6,7 @@ import com.google.gtasks.data.api.ApiClient
 import com.google.gtasks.data.repository.AuthRepository
 import com.google.gtasks.data.repository.ChatRepository
 import com.google.gtasks.data.repository.TaskRepository
+import com.google.gtasks.data.repository.TranslationRepository
 import com.google.gtasks.domain.llm.LlmReasoningEngine
 import com.google.gtasks.domain.llm.LocalGemmaEngine
 import com.google.gtasks.domain.llm.RemoteGeminiEngine
@@ -38,6 +39,10 @@ class AppContainer(private val context: Context) {
 
     val chatRepository: ChatRepository by lazy {
         ChatRepository(apiClient, authRepository)
+    }
+
+    val translationRepository: TranslationRepository by lazy {
+        TranslationRepository(apiClient)
     }
 
     // 3. Reasoning Engines

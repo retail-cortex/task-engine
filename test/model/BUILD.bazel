@@ -32,3 +32,17 @@ go_test(
         "@com_github_stretchr_testify//assert",
     ],
 )
+
+go_test(
+    name = "model_test",
+    srcs = [
+        "event_test.go",
+        "seed_test.go",
+        "types_test.go",
+        "user_test.go",
+    ],
+    deps = [
+        "//pkg/model",
+        "@com_github_stretchr_testify//assert",
+    ],
+)

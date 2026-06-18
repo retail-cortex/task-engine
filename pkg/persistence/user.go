@@ -55,7 +55,7 @@ func (r *userRepository) Create(ctx context.Context, u *model.User) error {
 
 func (r *userRepository) FindByID(ctx context.Context, id string) (*model.User, error) {
 	var u model.User
-	err := r.db.WithContext(ctx).Preload("Roles").Preload("Organizations").Preload("Sites").First(&u, "id = ?", id).Error
+	err := r.db.WithContext(ctx).Preload("Roles").Preload("Organizations").Preload("Sites").Preload("PreferredLanguage").First(&u, "id = ?", id).Error
 	return &u, err
 }
 
@@ -130,6 +130,6 @@ func (r *userRepository) ListRolesRange(ctx context.Context, offset, limit int) 
 
 func (r *userRepository) FindByOAuth(ctx context.Context, provider, oauthID string) (*model.User, error) {
 	var u model.User
-	err := r.db.WithContext(ctx).Preload("Roles").Preload("Organizations").Preload("Sites").First(&u, "o_auth_provider = ? AND o_auth_id = ?", provider, oauthID).Error
+	err := r.db.WithContext(ctx).Preload("Roles").Preload("Organizations").Preload("Sites").Preload("PreferredLanguage").First(&u, "o_auth_provider = ? AND o_auth_id = ?", provider, oauthID).Error
 	return &u, err
 }
