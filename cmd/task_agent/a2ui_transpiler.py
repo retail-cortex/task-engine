@@ -7,6 +7,265 @@ from a2a import types as a2a_types
 import google.adk.a2a.converters.part_converter as pc
 import google.adk.a2a.converters.event_converter as ec
 
+def generate_blueprint_svg(layout: str = "linear", x: Optional[float] = None, y: Optional[float] = None) -> str:
+    svg_styles = """
+    rect.fixture {
+        fill: rgba(99, 102, 241, 0.04);
+        stroke: rgba(99, 102, 241, 0.18);
+        stroke-width: 1;
+    }
+    .text-primary {
+        fill: rgba(255, 255, 255, 0.65);
+        font-family: Outfit, sans-serif;
+        font-weight: 600;
+    }
+    .text-secondary {
+        fill: rgba(255, 255, 255, 0.45);
+        font-family: Outfit, sans-serif;
+        font-weight: 500;
+    }
+    .text-muted {
+        fill: rgba(255, 255, 255, 0.25);
+        font-family: Outfit, sans-serif;
+    }
+    .beacon {
+        fill: #f87171;
+    }
+    """
+    
+    svg_content = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 150" style="background: #0b0d19; width: 100%; height: 100%;">
+      <style>{svg_styles}</style>
+      <rect x="2" y="2" width="196" height="146" rx="3" fill="none" stroke="rgba(255, 255, 255, 0.03)" stroke-width="1" stroke-dasharray="4,2" />
+    """
+    
+    if layout == "boutique":
+        svg_content += """
+        <rect class="fixture" x="5" y="5" width="22" height="40" rx="1" />
+        <text x="16" y="27" class="text-secondary" font-size="3.2" text-anchor="middle">LOADING BAY</text>
+
+        <rect class="fixture" x="5" y="65" width="22" height="78" rx="1" />
+        <text x="16" y="105" class="text-secondary" font-size="3.2" text-anchor="middle">STOCK CAGE</text>
+
+        <rect class="fixture" x="35" y="5" width="60" height="10" rx="1" />
+        <text x="65" y="11" class="text-secondary" font-size="3" text-anchor="middle">ORGANIC MICRO-GREENS WALL</text>
+
+        <rect class="fixture" x="155" y="5" width="40" height="35" rx="1" />
+        <text x="175" y="23" class="text-secondary" font-size="3.2" text-anchor="middle">SECURE VAULT</text>
+
+        <circle cx="100" cy="75" r="20" class="fixture" fill="none" stroke-width="3" />
+        <text x="100" y="76" class="text-secondary" font-size="3.2" text-anchor="middle">SHOWCASE A</text>
+
+        <circle cx="60" cy="75" r="12" class="fixture" fill="none" stroke-width="2" />
+        <text x="60" y="76" class="text-muted" font-size="2.5" text-anchor="middle">SHOWCASE B</text>
+
+        <circle cx="140" cy="75" r="12" class="fixture" fill="none" stroke-width="2" />
+        <text x="140" y="76" class="text-muted" font-size="2.5" text-anchor="middle">SHOWCASE C</text>
+
+        <rect class="fixture" x="145" y="110" width="50" height="33" rx="2" />
+        <text x="170" y="128" class="text-secondary" font-size="3" text-anchor="middle">COFFEE BAR & LOUNGE</text>
+
+        <rect class="fixture" x="90" y="120" width="30" height="12" rx="1" />
+        <text x="105" y="127" class="text-primary" font-size="3" text-anchor="middle">CHECKOUT COUNTER</text>
+        """
+    elif layout == "racetrack":
+        svg_content += """
+        <rect class="fixture" x="50" y="40" width="100" height="65" rx="2" fill="none" stroke-width="1.5" stroke-dasharray="3,3" />
+        <text x="100" y="74" class="text-secondary" font-size="3.8" text-anchor="middle">ATRIUM EXPERIENCE CENTER</text>
+
+        <rect class="fixture" x="165" y="5" width="30" height="25" rx="1" />
+        <text x="180" y="19" class="text-secondary" font-size="3" text-anchor="middle">INTAKE BAY</text>
+
+        <rect class="fixture" x="165" y="35" width="30" height="55" rx="1" />
+        <text x="180" y="65" class="text-secondary" font-size="3" text-anchor="middle" transform="rotate(-90 180 65)">STAGING AREA C</text>
+
+        <rect class="fixture" x="5" y="110" width="40" height="35" rx="1" />
+        <text x="25" y="129" class="text-secondary" font-size="3.2" text-anchor="middle">SUB-LEVEL VAULT</text>
+
+        <rect class="fixture" x="120" y="115" width="40" height="28" rx="1" />
+        <text x="140" y="131" class="text-primary" font-size="3" text-anchor="middle">REGISTER GALLERY</text>
+
+        <rect class="fixture" x="5" y="5" width="55" height="15" rx="1" />
+        <text x="32.5" y="14" class="text-secondary" font-size="3" text-anchor="middle">FRESH CANOPY</text>
+
+        <rect class="fixture" x="65" y="5" width="90" height="15" rx="1" />
+        <text x="110" y="14" class="text-secondary" font-size="3" text-anchor="middle">PERISHABLES MARKET</text>
+
+        <rect class="fixture" x="20" y="30" width="10" height="70" rx="1" />
+        <text x="25" y="65" class="text-muted" font-size="3" text-anchor="middle" transform="rotate(-90 25 65)">AISLE A</text>
+
+        <rect class="fixture" x="140" y="30" width="10" height="70" rx="1" />
+        <text x="145" y="65" class="text-muted" font-size="3" text-anchor="middle" transform="rotate(-90 145 65)">AISLE B</text>
+
+        <rect x="10" y="24" width="150" height="2" fill="rgba(255, 255, 255, 0.03)" opacity="0.4" />
+        <rect x="40" y="107" width="115" height="2" fill="rgba(255, 255, 255, 0.03)" opacity="0.4" />
+        """
+    else: # linear
+        svg_content += """
+        <rect class="fixture" x="5" y="5" width="22" height="15" rx="1" />
+        <text x="16" y="14" class="text-secondary" font-size="3.2" text-anchor="middle">DOCK A</text>
+
+        <rect class="fixture" x="5" y="23" width="22" height="15" rx="1" />
+        <text x="16" y="32" class="text-secondary" font-size="3.2" text-anchor="middle">DOCK B</text>
+
+        <rect class="fixture" x="5" y="41" width="22" height="24" rx="1" />
+        <text x="16" y="54" class="text-secondary" font-size="3.2" text-anchor="middle">STORAGE CAGE B</text>
+
+        <rect class="fixture" x="5" y="68" width="22" height="28" rx="1" />
+        <text x="16" y="83" class="text-secondary" font-size="3.2" text-anchor="middle">WALK-IN COOLER</text>
+
+        <rect class="fixture" x="5" y="99" width="22" height="46" rx="1" />
+        <text x="16" y="123" class="text-secondary" font-size="3.2" text-anchor="middle">PHARMACY WING</text>
+
+        <rect class="fixture" x="30" y="5" width="87" height="8" rx="1" />
+        <text x="73.5" y="10.5" class="text-secondary" font-size="3.2" text-anchor="middle">PRODUCE PERIMETER WET WALL</text>
+
+        <rect class="fixture" x="120" y="5" width="50" height="8" rx="1" />
+        <text x="145" y="10.5" class="text-secondary" font-size="3.2" text-anchor="middle">HOT FOOD DELI DEPOT</text>
+
+        <rect class="fixture" x="173" y="5" width="22" height="15" rx="1" />
+        <text x="184" y="14" class="text-secondary" font-size="3.2" text-anchor="middle">BAKERY OVENS</text>
+
+        <rect class="fixture" x="30" y="22" width="12" height="40" rx="1" />
+        <text x="36" y="44" class="text-muted" font-size="3.5" text-anchor="middle" transform="rotate(-90 36 44)">AISLE 7A</text>
+        
+        <rect class="fixture" x="30" y="82" width="12" height="40" rx="1" />
+        <text x="36" y="104" class="text-muted" font-size="3.5" text-anchor="middle" transform="rotate(-90 36 104)">AISLE 7B</text>
+
+        <rect class="fixture" x="30" y="16" width="12" height="4" rx="0.5" fill="rgba(99, 102, 241, 0.25)" />
+        <text x="36" y="19.2" class="text-primary" font-size="2.5" text-anchor="middle">E1</text>
+        <rect class="fixture" x="30" y="124" width="12" height="4" rx="0.5" fill="rgba(99, 102, 241, 0.25)" />
+        <text x="36" y="127.2" class="text-primary" font-size="2.5" text-anchor="middle">E2</text>
+
+        <rect class="fixture" x="55" y="22" width="12" height="40" rx="1" />
+        <text x="61" y="44" class="text-muted" font-size="3.5" text-anchor="middle" transform="rotate(-90 61 44)">AISLE 8A</text>
+
+        <rect class="fixture" x="55" y="82" width="12" height="40" rx="1" />
+        <text x="61" y="104" class="text-muted" font-size="3.5" text-anchor="middle" transform="rotate(-90 61 104)">AISLE 8B</text>
+
+        <rect class="fixture" x="55" y="16" width="12" height="4" rx="0.5" fill="rgba(99, 102, 241, 0.25)" />
+        <text x="61" y="19.2" class="text-primary" font-size="2.5" text-anchor="middle">E3</text>
+        <rect class="fixture" x="55" y="124" width="12" height="4" rx="0.5" fill="rgba(99, 102, 241, 0.25)" />
+        <text x="61" y="127.2" class="text-primary" font-size="2.5" text-anchor="middle">E4</text>
+
+        <rect class="fixture" x="80" y="22" width="12" height="40" rx="1" />
+        <text x="86" y="44" class="text-muted" font-size="3.5" text-anchor="middle" transform="rotate(-90 86 44)">AISLE 9A</text>
+
+        <rect class="fixture" x="80" y="82" width="12" height="40" rx="1" />
+        <text x="86" y="104" class="text-muted" font-size="3.5" text-anchor="middle" transform="rotate(-90 86 104)">AISLE 9B</text>
+
+        <rect class="fixture" x="80" y="16" width="12" height="4" rx="0.5" fill="rgba(99, 102, 241, 0.25)" />
+        <text x="86" y="19.2" class="text-primary" font-size="2.5" text-anchor="middle">E5</text>
+        <rect class="fixture" x="80" y="124" width="12" height="4" rx="0.5" fill="rgba(99, 102, 241, 0.25)" />
+        <text x="86" y="127.2" class="text-primary" font-size="2.5" text-anchor="middle">E6</text>
+
+        <rect class="fixture" x="105" y="22" width="12" height="40" rx="1" />
+        <text x="111" y="44" class="text-muted" font-size="3.5" text-anchor="middle" transform="rotate(-90 111 44)">AISLE 10A</text>
+
+        <rect class="fixture" x="105" y="82" width="12" height="40" rx="1" />
+        <text x="111" y="104" class="text-muted" font-size="3.5" text-anchor="middle" transform="rotate(-90 111 104)">AISLE 10B</text>
+
+        <rect class="fixture" x="105" y="16" width="12" height="4" rx="0.5" fill="rgba(99, 102, 241, 0.25)" />
+        <text x="111" y="19.2" class="text-primary" font-size="2.5" text-anchor="middle">E7</text>
+        <rect class="fixture" x="105" y="124" width="12" height="4" rx="0.5" fill="rgba(99, 102, 241, 0.25)" />
+        <text x="111" y="127.2" class="text-primary" font-size="2.5" text-anchor="middle">E8</text>
+
+        <rect class="fixture" x="148" y="25" width="4" height="12" rx="0.5" />
+        <text x="150" y="32.5" class="text-primary" font-size="2.8" text-anchor="middle">R1</text>
+
+        <rect class="fixture" x="148" y="45" width="4" height="12" rx="0.5" />
+        <text x="150" y="52.5" class="text-primary" font-size="2.8" text-anchor="middle">R2</text>
+
+        <rect class="fixture" x="148" y="65" width="4" height="12" rx="0.5" />
+        <text x="150" y="72.5" class="text-primary" font-size="2.8" text-anchor="middle">R3</text>
+
+        <rect class="fixture" x="148" y="85" width="4" height="12" rx="0.5" />
+        <text x="150" y="92.5" class="text-primary" font-size="2.8" text-anchor="middle">R4</text>
+
+        <rect class="fixture" x="135" y="112" width="30" height="10" rx="1" />
+        <text x="150" y="118.5" class="text-secondary" font-size="3" text-anchor="middle">HELP DESK</text>
+
+        <rect class="fixture" x="173" y="112" width="22" height="33" rx="1" />
+        <text x="184" y="130" class="text-secondary" font-size="3.2" text-anchor="middle">CASH VAULT</text>
+        """
+        
+    if x is not None and y is not None:
+        svg_content += f"""
+        <circle class="beacon" cx="{x}" cy="{y}" r="2" />
+        <circle cx="{x}" cy="{y}" r="4" fill="none" stroke="#f87171" stroke-width="0.5" opacity="0.8">
+          <animate attributeName="r" values="2;7;2" dur="2s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.8;0;0.8" dur="2s" repeatCount="indefinite" />
+        </circle>
+        """
+        
+    svg_content += "</svg>"
+    return svg_content
+
+def normalize_usage_hint(hint: str) -> str:
+    hint = str(hint).lower()
+    if hint in ["h1", "h2", "h3", "body", "caption"]:
+        return hint
+    if hint == "primary":
+        return "body"
+    if hint == "secondary":
+        return "caption"
+    return "body"
+
+def process_and_inline_blueprints(card_data: Any):
+    """Recursively scans and replaces any blueprint canvas Image URLs with self-contained Base64 Data URIs."""
+    if isinstance(card_data, list):
+        for item in card_data:
+            process_and_inline_blueprints(item)
+        return
+
+    if not isinstance(card_data, dict):
+        return
+
+    # If this is a surfaceUpdate containing components
+    if "surfaceUpdate" in card_data and isinstance(card_data["surfaceUpdate"], dict):
+        components = card_data["surfaceUpdate"].get("components", [])
+        if isinstance(components, list):
+            for comp in components:
+                if not isinstance(comp, dict):
+                    continue
+                raw_comp = comp.get("component", {})
+                if not isinstance(raw_comp, dict):
+                    continue
+                # If this component is an Image
+                if "Image" in raw_comp and isinstance(raw_comp["Image"], dict):
+                    url_obj = raw_comp["Image"].get("url", {})
+                    if isinstance(url_obj, dict):
+                        url_str = url_obj.get("literalString", "")
+                        if "/api/v1/blueprint" in url_str:
+                            try:
+                                # Parse query params to extract layout, x, y
+                                from urllib.parse import urlparse, parse_qs
+                                parsed = urlparse(url_str)
+                                params = parse_qs(parsed.query)
+                                
+                                layout = params.get("layout", ["linear"])[0]
+                                x_val = params.get("x")
+                                y_val = params.get("y")
+                                
+                                x = float(x_val[0]) if x_val else None
+                                y = float(y_val[0]) if y_val else None
+                                
+                                # Generate SVG directly in python
+                                svg_str = generate_blueprint_svg(layout, x, y)
+                                import base64
+                                encoded = base64.b64encode(svg_str.encode('utf-8')).decode('utf-8')
+                                inline_url = f"data:image/svg+xml;base64,{encoded}"
+                                
+                                # Replace with inline Data URI
+                                url_obj["literalString"] = inline_url
+                                print(f"[A2UI Monkeypatch] Inlined blueprint SVG into flat transaction component {comp.get('id')}! Layout: {layout}, x={x}, y={y}")
+                            except Exception as ex:
+                                print(f"[A2UI Monkeypatch] Failed to inline blueprint SVG: {ex}")
+
+    # Also recursively scan any other sub-dicts or lists just in case
+    for k, v in card_data.items():
+        if isinstance(v, (dict, list)):
+            process_and_inline_blueprints(v)
+
 def normalize_card_to_a2ui_messages(flat_card: Dict[str, Any], surface_id: str = "@default") -> List[Dict[str, Any]]:
     components = {}
     comp_counter = 0
@@ -233,7 +492,8 @@ def normalize_card_to_a2ui_messages(flat_card: Dict[str, Any], surface_id: str =
                 "text": {"literalString": str(text_val)}
             }
             if "style" in node or "usageHint" in node:
-                properties["usageHint"] = node.get("usageHint", node.get("style", "body"))
+                raw_hint = node.get("usageHint", node.get("style", "body"))
+                properties["usageHint"] = normalize_usage_hint(raw_hint)
             components[comp_id] = {
                 "id": comp_id,
                 "component": {
@@ -266,7 +526,7 @@ def normalize_card_to_a2ui_messages(flat_card: Dict[str, Any], surface_id: str =
                     "component": {
                         "Text": {
                             "text": {"literalString": str(val)},
-                            "usageHint": "secondary"
+                            "usageHint": "caption"
                         }
                     }
                 }
@@ -343,14 +603,10 @@ def normalize_card_to_a2ui_messages(flat_card: Dict[str, Any], surface_id: str =
             x = beacon.get("x")
             y = beacon.get("y")
             
-            import os
-            agent_host = os.environ.get("AGENT_HOST_URL")
-            if not agent_host:
-                agent_host = "https://gemini-task-agent-dev-10781708810.us-central1.run.app"
-                
-            img_url = f"{agent_host}/api/v1/blueprint?layout={layout}"
-            if x is not None and y is not None:
-                img_url += f"&x={x}&y={y}"
+            svg_data = generate_blueprint_svg(layout, x, y)
+            import base64
+            encoded_svg = base64.b64encode(svg_data.encode('utf-8')).decode('utf-8')
+            img_url = f"data:image/svg+xml;base64,{encoded_svg}"
                 
             components[comp_id] = {
                 "id": comp_id,
@@ -423,7 +679,7 @@ def custom_convert_a2a_part_to_genai_part(a2a_part: a2a_types.Part) -> Optional[
 import google.adk.a2a.converters.event_converter as ec
 
 # Global memory cache for pre-synthesized Go-native A2UI Cards to prevent LLM text corruption
-CACHED_A2UI_CARD = None
+CACHED_A2UI_CARDS = {}
 
 
 def custom_convert_event_to_a2a_message(
@@ -459,10 +715,11 @@ def custom_convert_event_to_a2a_message(
                 has_token = any(t in text for t in cache_tokens)
                 if has_token:
                     import builtins
-                    cached_card = getattr(builtins, "CACHED_A2UI_CARD", None)
-                    if cached_card:
-                        print("[A2UI Monkeypatch] Found cached card token. Retrieving cached JSON card from builtins...")
-                        json_str = cached_card
+                    token = next(t for t in cache_tokens if t in text)
+                    cached_cards = getattr(builtins, "CACHED_A2UI_CARDS", {})
+                    json_str = cached_cards.get(token)
+                    if json_str:
+                        print(f"[A2UI Monkeypatch] Found cached card token {token}. Retrieving cached JSON card from builtins.CACHED_A2UI_CARDS...")
                         
                         # Strip markdown code fences if present in cached_card to prevent json.loads failure
                         json_match_cached = re.search(r'```(?:json)?\s*(.*?)\s*```', json_str, re.DOTALL | re.IGNORECASE)
@@ -471,11 +728,10 @@ def custom_convert_event_to_a2a_message(
                         else:
                             json_str = json_str.strip()
 
-                        token = next(t for t in cache_tokens if t in text)
                         idx = text.find(token)
                         text_prefix = text[:idx].strip()
                     else:
-                        print("[A2UI Monkeypatch] Error: Cached token found but builtins.CACHED_A2UI_CARD is None!")
+                        print(f"[A2UI Monkeypatch] Error: Cached token {token} found but not present in builtins.CACHED_A2UI_CARDS!")
 
                 elif json_match:
                     json_str = json_match.group(1).strip()
@@ -489,6 +745,9 @@ def custom_convert_event_to_a2a_message(
                     try:
                         card_data = json.loads(json_str)
                         if isinstance(card_data, dict):
+                            # Recursively scan and inline all blueprint canvas URLs as self-contained Base64 Data URIs
+                            process_and_inline_blueprints(card_data)
+                            
                             # Check if this is a pre-synthesized Go-native flat A2UI transaction
                             if "surfaceUpdate" in card_data and "beginRendering" in card_data:
                                 is_card = True

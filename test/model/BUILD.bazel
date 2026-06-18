@@ -41,6 +41,10 @@ go_test(
         "types_test.go",
         "user_test.go",
     ],
+    data = [
+        "//scripts:dev_env.sql",
+        "//scripts:dev_events.sql",
+    ],
     deps = [
         "//pkg/model",
         "@com_github_stretchr_testify//assert",

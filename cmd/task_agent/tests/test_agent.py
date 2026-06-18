@@ -1,66 +1,81 @@
 import sys
-from unittest import mock
+from unittest import TestCase, mock
 
-# Mock the entire google.adk package structure to ensure the test runs 100% hermetically
-# without requiring connectivity or credentials to the private google-adk Artifact Registry.
-mock_adk = mock.MagicMock()
-# Register dummy sys.modules for all third-party dependencies to keep test hermetic
-sys.modules['google'] = mock_adk
-sys.modules['google.genai'] = mock_adk
-sys.modules['google.adk'] = mock_adk
-sys.modules['google.adk.agents'] = mock_adk
-sys.modules['google.adk.agents.readonly_context'] = mock_adk
-sys.modules['google.adk.tools'] = mock_adk
-sys.modules['google.adk.tools.base_tool'] = mock_adk
-sys.modules['google.adk.tools.base_toolset'] = mock_adk
-sys.modules['google.adk.tools.tool_context'] = mock_adk
-sys.modules['google.adk.tools.mcp_tool'] = mock_adk
-sys.modules['google.adk.tools.mcp_tool.mcp_toolset'] = mock_adk
-sys.modules['google.adk.tools.mcp_tool.mcp_session_manager'] = mock_adk
+# 1. Create distinct mocks for each module/class to prevent mock contamination
+mock_llm_agent = mock.MagicMock()
+mock_base_tool = mock.MagicMock()
+mock_base_toolset = mock.MagicMock()
+
+# Create individual module mocks
+mock_genai_types = mock.MagicMock()
+mock_readonly_context = mock.MagicMock()
+mock_tool_context = mock.MagicMock()
+
+# Setup sys.modules
+sys.modules['google'] = mock.MagicMock()
+sys.modules['google.genai'] = mock_genai_types
+sys.modules['google.genai.types'] = mock_genai_types
+
+adk_agents_module = mock.MagicMock()
+adk_agents_module.LlmAgent = mock_llm_agent
+sys.modules['google.adk.agents'] = adk_agents_module
+sys.modules['google.adk.agents.readonly_context'] = mock_readonly_context
+
+class DummyBaseTool:
+    def __init__(self, name=None, description=None, *args, **kwargs):
+        self.name = name
+        self.description = description
+
+class DummyBaseToolset:
+    def __init__(self, *args, **kwargs):
+        pass
+
+adk_tools_base_tool = mock.MagicMock()
+adk_tools_base_tool.BaseTool = DummyBaseTool
+sys.modules['google.adk.tools.base_tool'] = adk_tools_base_tool
+
+adk_tools_base_toolset = mock.MagicMock()
+adk_tools_base_toolset.BaseToolset = DummyBaseToolset
+sys.modules['google.adk.tools.base_toolset'] = adk_tools_base_toolset
+
+sys.modules['google.adk.tools.tool_context'] = mock_tool_context
 
 mock_httpx = mock.MagicMock()
 sys.modules['httpx'] = mock_httpx
 
-# Now import the target agent under test
+# Import the agent under test
 from agents.task_agent import root_agent
 
-def test_agent_structure():
-    # Since LlmAgent is a mock, root_agent is the return value of LlmAgent(...) call.
-    from google.adk.agents import LlmAgent
-    from google.adk.tools.mcp_tool.mcp_toolset import McpToolset
-    from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
 
-    # Verify LlmAgent was instantiated
-    LlmAgent.assert_called_once()
-    
-    # Extract constructor arguments
-    _, kwargs = LlmAgent.call_args
-    
-    assert kwargs["name"] == "Gemini_Task_Agent"
-    assert "OPERATIONAL PROTOCOL" in kwargs["instruction"]
-    assert "get_user_context" in kwargs["instruction"]
-    assert "query_sop" in kwargs["instruction"]
-    assert "STORE SPATIAL BLUEPRINT MAP" in kwargs["instruction"]
-    assert "canvas" in kwargs["instruction"]
-    assert "boutique" in kwargs["instruction"]
-    assert "racetrack" in kwargs["instruction"]
-    assert "Active store layout context" in kwargs["instruction"]
-    assert "Store Layout Style" in kwargs["instruction"]
-    assert "LOCATION_ACKNOWLEDGE" in kwargs["instruction"]
-    
-    # Verify tools configuration
-    tools = kwargs["tools"]
-    assert len(tools) == 1
-    
-    # Verify McpToolset was instantiated inside tools list
-    McpToolset.assert_called_once()
-    _, tool_kwargs = McpToolset.call_args
-    
-    # Verify connection params passed to McpToolset
-    params = tool_kwargs["connection_params"]
-    assert params is not None
-    
-    # Verify StreamableHTTPConnectionParams was instantiated with correct url
-    StreamableHTTPConnectionParams.assert_called_once()
-    _, params_kwargs = StreamableHTTPConnectionParams.call_args
-    assert "api/v1/mcp" in params_kwargs["url"]
+class TestTaskAgentStructure(TestCase):
+    def test_agent_initialization(self):
+        # Verify LlmAgent constructor was called exactly once
+        mock_llm_agent.assert_called_once()
+        
+        # Extract constructor arguments
+        _, kwargs = mock_llm_agent.call_args
+        
+        # Verify core metadata
+        self.assertEqual(kwargs["name"], "Gemini_Task_Agent")
+        self.assertEqual(kwargs["model"], "gemini-2.5-flash")
+        self.assertIn("retail operations coordinator", kwargs["description"])
+        
+        # Verify key parts of the system instruction are present
+        instruction = kwargs["instruction"]
+        self.assertIn("OPERATIONAL PROTOCOL", instruction)
+        self.assertIn("get_user_context", instruction)
+        self.assertIn("query_sop", instruction)
+        self.assertIn("get_store_selector", instruction)
+        self.assertIn("A2UI CARD OUTPUT PROTOCOL", instruction)
+        
+        # Verify tools configuration
+        tools = kwargs["tools"]
+        self.assertEqual(len(tools), 1)
+        
+        # Verify that the toolset is an instance of StatelessMcpToolset
+        from agents.task_agent.task_agent import StatelessMcpToolset
+        self.assertIsInstance(tools[0], StatelessMcpToolset)
+        
+        # Verify callback registration
+        from agents.task_agent.task_agent import strip_tool_namespaces_callback
+        self.assertEqual(kwargs["after_model_callback"], strip_tool_namespaces_callback)

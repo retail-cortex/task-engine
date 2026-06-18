@@ -139,34 +139,33 @@ class StatelessMcpTool(BaseTool):
                 raise Exception(f"Tool execution failed: {content_text}")
                 
             # Intercept and cache high-volume A2UI JSON cards to prevent LLM text corruption
+            import builtins
+            if not hasattr(builtins, "CACHED_A2UI_CARDS"):
+                builtins.CACHED_A2UI_CARDS = {}
+
             if self.name == "get_tasks" and args.get("format") == "a2ui":
-                import builtins
-                builtins.CACHED_A2UI_CARD = content_text
-                print(f"[A2UI Cache] Intercepted get_tasks a2ui card and cached it in builtins. Length: {len(content_text)}")
+                builtins.CACHED_A2UI_CARDS["[A2UI_CARD_TASK_LIST_CACHED]"] = content_text
+                print(f"[A2UI Cache] Intercepted get_tasks a2ui card and cached it in builtins.CACHED_A2UI_CARDS. Length: {len(content_text)}")
                 return "[A2UI_CARD_TASK_LIST_CACHED]"
                 
             if self.name == "get_site_locations" and args.get("format") == "a2ui":
-                import builtins
-                builtins.CACHED_A2UI_CARD = content_text
-                print(f"[A2UI Cache] Intercepted get_site_locations a2ui card and cached it in builtins. Length: {len(content_text)}")
+                builtins.CACHED_A2UI_CARDS["[A2UI_CARD_LOCATIONS_CACHED]"] = content_text
+                print(f"[A2UI Cache] Intercepted get_site_locations a2ui card and cached it in builtins.CACHED_A2UI_CARDS. Length: {len(content_text)}")
                 return "[A2UI_CARD_LOCATIONS_CACHED]"
                 
             if self.name == "get_task_details":
-                import builtins
-                builtins.CACHED_A2UI_CARD = content_text
-                print(f"[A2UI Cache] Intercepted get_task_details a2ui card and cached it in builtins. Length: {len(content_text)}")
+                builtins.CACHED_A2UI_CARDS["[A2UI_CARD_TASK_DETAILS_CACHED]"] = content_text
+                print(f"[A2UI Cache] Intercepted get_task_details a2ui card and cached it in builtins.CACHED_A2UI_CARDS. Length: {len(content_text)}")
                 return "[A2UI_CARD_TASK_DETAILS_CACHED]"
 
             if self.name == "get_weather":
-                import builtins
-                builtins.CACHED_A2UI_CARD = content_text
-                print(f"[A2UI Cache] Intercepted get_weather a2ui card and cached it in builtins. Length: {len(content_text)}")
+                builtins.CACHED_A2UI_CARDS["[A2UI_CARD_WEATHER_CACHED]"] = content_text
+                print(f"[A2UI Cache] Intercepted get_weather a2ui card and cached it in builtins.CACHED_A2UI_CARDS. Length: {len(content_text)}")
                 return "[A2UI_CARD_WEATHER_CACHED]"
 
             if self.name == "get_store_selector":
-                import builtins
-                builtins.CACHED_A2UI_CARD = content_text
-                print(f"[A2UI Cache] Intercepted get_store_selector a2ui card and cached it in builtins. Length: {len(content_text)}")
+                builtins.CACHED_A2UI_CARDS["[A2UI_CARD_STORE_SELECTOR_CACHED]"] = content_text
+                print(f"[A2UI Cache] Intercepted get_store_selector a2ui card and cached it in builtins.CACHED_A2UI_CARDS. Length: {len(content_text)}")
                 return "[A2UI_CARD_STORE_SELECTOR_CACHED]"
                 
             return content_text

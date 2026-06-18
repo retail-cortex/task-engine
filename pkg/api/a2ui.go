@@ -544,8 +544,8 @@ func NormalizeCardToA2UITransaction(legacyCard map[string]interface{}, surfaceID
 				if hint == "" {
 					hint = style
 				}
-				properties.UsageHint = hint
-				properties.Style = hint
+				properties.UsageHint = normalizeUsageHint(hint)
+				properties.Style = normalizeUsageHint(hint)
 			}
 			components = append(components, A2UIComponent{
 				ID: compID,
@@ -582,7 +582,7 @@ func NormalizeCardToA2UITransaction(legacyCard map[string]interface{}, surfaceID
 						Component: ComponentWrapper{
 							Text: &TextProps{
 								Text:      LiteralString(val),
-								UsageHint: "secondary",
+								UsageHint: "caption",
 							},
 						},
 					})
@@ -738,4 +738,18 @@ func NormalizeCardToA2UITransaction(legacyCard map[string]interface{}, surfaceID
 	}
 
 	return NewA2UITransaction(surfaceID, rootID, components, initialData)
+}
+
+func normalizeUsageHint(hint string) string {
+	hint = strings.ToLower(hint)
+	switch hint {
+	case "h1", "h2", "h3", "body", "caption":
+		return hint
+	case "primary":
+		return "body"
+	case "secondary":
+		return "caption"
+	default:
+		return "body"
+	}
 }
