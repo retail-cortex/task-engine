@@ -216,6 +216,14 @@ type SchedulerService interface {
 	NodeID() string
 	GetStatus() SchedulerStatus
 	ForceTriggerBatchSweep(ctx context.Context) error
+
+	// Operational overrides
+	SetNodeID(id string)
+	SetLeader(isLeader bool)
+	ClaimAndProcessTasks(ctx context.Context)
+	RecoverOrOrphanStaleLocks(ctx context.Context)
+	AttemptLeaderElection(ctx context.Context)
+	ReleaseLeaderLock()
 }
 
 type schedulerService struct {
@@ -329,6 +337,17 @@ func (s *schedulerService) NodeID() string {
 	return s.nodeID
 }
 
+func (s *schedulerService) SetNodeID(id string) {
+	s.nodeID = id
+	s.statusMutex.Lock()
+	s.status.NodeID = id
+	s.statusMutex.Unlock()
+}
+
+func (s *schedulerService) SetLeader(isLeader bool) {
+	s.isLeader = isLeader
+}
+
 func (s *schedulerService) IsLeader() bool {
 	s.statusMutex.RLock()
 	defer s.statusMutex.RUnlock()
@@ -355,8 +374,8 @@ func (s *schedulerService) Start(ctx context.Context) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	s.cancelFunc = cancel
 
-	// 1. Initial Leader Election attempt
-	s.attemptLeaderElection(runCtx)
+	// Attempt election immediately on start to prevent startup delay
+	s.AttemptLeaderElection(runCtx)
 
 	// 2. Spawn concurrent background loops
 	s.workerWg.Add(5)
@@ -386,7 +405,7 @@ func (s *schedulerService) Stop() error {
 
 	s.workerWg.Wait()
 
-	s.releaseLeaderLock()
+	s.ReleaseLeaderLock()
 
 	log.Printf("[Scheduler][%s] Scheduler pool terminated successfully.", s.nodeID)
 	return nil
@@ -413,12 +432,12 @@ func (s *schedulerService) leaderElectionLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.attemptLeaderElection(ctx)
+			s.AttemptLeaderElection(ctx)
 		}
 	}
 }
 
-func (s *schedulerService) attemptLeaderElection(ctx context.Context) {
+func (s *schedulerService) AttemptLeaderElection(ctx context.Context) {
 	s.connMutex.Lock()
 	defer s.connMutex.Unlock()
 
@@ -445,7 +464,7 @@ func (s *schedulerService) attemptLeaderElection(ctx context.Context) {
 	}
 }
 
-func (s *schedulerService) releaseLeaderLock() {
+func (s *schedulerService) ReleaseLeaderLock() {
 	s.connMutex.Lock()
 	defer s.connMutex.Unlock()
 	s.releaseLeaderLockUnlocked()
@@ -480,12 +499,12 @@ func (s *schedulerService) workerTaskClaimLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.claimAndProcessTasks(ctx)
+			s.ClaimAndProcessTasks(ctx)
 		}
 	}
 }
 
-func (s *schedulerService) claimAndProcessTasks(ctx context.Context) {
+func (s *schedulerService) ClaimAndProcessTasks(ctx context.Context) {
 	lockCutoff := time.Now().Add(-s.lockTimeout)
 	executions, err := s.lockClient.ClaimPendingTasks(ctx, s.taskClaimLimit, lockCutoff, s.nodeID)
 	if err != nil {
@@ -577,9 +596,7 @@ func (s *schedulerService) claimAndProcessRAGIndexes(ctx context.Context) {
 
 	for _, proc := range processes {
 		go func(p *model.SOPProcess) {
-			if rag, ok := s.ragService.(*ragService); ok {
-				rag.processSOPPipeline(ctx, p.SOPID, p.ID)
-			}
+			s.ragService.ProcessSOPPipeline(ctx, p.SOPID, p.ID)
 		}(proc)
 	}
 }
@@ -598,13 +615,13 @@ func (s *schedulerService) deadLetterWatchdogLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if s.IsLeader() {
-				s.recoverOrOrphanStaleLocks(ctx)
+				s.RecoverOrOrphanStaleLocks(ctx)
 			}
 		}
 	}
 }
 
-func (s *schedulerService) recoverOrOrphanStaleLocks(ctx context.Context) {
+func (s *schedulerService) RecoverOrOrphanStaleLocks(ctx context.Context) {
 	lockCutoff := time.Now().Add(-s.lockTimeout)
 
 	// 1. Audit and recover stale standard task execution locks

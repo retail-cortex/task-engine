@@ -37,6 +37,8 @@ class ApiClient(private val context: Context) {
             _apiService = null
         }
 
+    var onUnauthorizedListener: (() -> Unit)? = null
+
     fun clearSession() {
         prefs.edit().remove(PREF_JWT_TOKEN).apply()
     }
@@ -52,7 +54,11 @@ class ApiClient(private val context: Context) {
                 token?.let { t ->
                     requestBuilder.addHeader("Authorization", "Bearer $t")
                 }
-                chain.proceed(requestBuilder.build())
+                val response = chain.proceed(requestBuilder.build())
+                if (response.code == 401) {
+                    onUnauthorizedListener?.invoke()
+                }
+                response
             }
             .addInterceptor(loggingInterceptor)
             .build()

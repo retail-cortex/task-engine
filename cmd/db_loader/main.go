@@ -127,6 +127,7 @@ func MigrateSchema(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&model.Organization{},
 		&model.TimeZone{},
+		&model.Language{},
 		&model.ICAOCode{},
 		&model.Site{},
 		&model.Location{},

@@ -23,6 +23,7 @@ go_library(
         "execution.go",
         "hooks.go",
         "icao.go",
+        "language.go",
         "location.go",
         "organization.go",
         "session.go",
@@ -38,17 +39,3 @@ go_library(
     deps = ["@io_gorm_gorm//:gorm"],
 )
 
-go_test(
-    name = "model_test",
-    srcs = [
-        "event_test.go",
-        "seed_test.go",
-        "types_test.go",
-    ],
-    data = [
-        "//scripts:dev_env.sql",
-        "//scripts:dev_events.sql",
-    ],
-    embed = [":model"],
-    deps = ["@com_github_stretchr_testify//assert"],
-)

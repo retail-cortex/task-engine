@@ -88,6 +88,12 @@ interface ApiInterface {
         @Path("siteId") siteId: String,
         @Path("tradeId") tradeId: String
     ): Map<String, String>
+
+    @GET("api/v1/organizations/{orgId}/sites/{siteId}/associates")
+    suspend fun getSiteAssociates(
+        @Path("orgId") orgId: String,
+        @Path("siteId") siteId: String
+    ): List<UserDTO>
 }
 
 // Request DTOs

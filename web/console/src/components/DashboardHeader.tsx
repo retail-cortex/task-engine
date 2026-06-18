@@ -40,6 +40,7 @@ interface DashboardHeaderProps {
   selectedRoleFilter?: string;
   onRoleFilterChange?: (role: string) => void;
   onNavigateToAdmin?: () => void;
+  onNavigateToAnalytics?: () => void;
 }
 
 const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -65,7 +66,8 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onAssigneeFilterChange,
   selectedRoleFilter = "ALL",
   onRoleFilterChange,
-  onNavigateToAdmin
+  onNavigateToAdmin,
+  onNavigateToAnalytics
 }: DashboardHeaderProps) => {
 
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
@@ -329,6 +331,27 @@ const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                   </span>
                 )}
               </div>
+
+              {(userRole === 'ADMIN' || userRole === 'REGION_MANAGER' || userRole === 'SITE_MANAGER') && onNavigateToAnalytics && (
+                <button
+                  id="analytics-dashboard-button"
+                  type="button"
+                  className="dropdown-menu-item"
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    onNavigateToAnalytics();
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="dropdown-menu-icon" style={{ color: 'var(--accent-primary)' }}>
+                      <line x1="18" y1="20" x2="18" y2="10" />
+                      <line x1="12" y1="20" x2="12" y2="4" />
+                      <line x1="6" y1="20" x2="6" y2="14" />
+                    </svg>
+                    <span>Workforce Analytics</span>
+                  </div>
+                </button>
+              )}
 
               {userRole === 'ADMIN' && onNavigateToAdmin && (
                 <button

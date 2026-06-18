@@ -41,17 +41,17 @@ INSERT INTO roles (id, name, description, created_at) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- 2. Seed Users
-INSERT INTO users (id, o_auth_provider, o_auth_id, email, name, metadata, created_at, updated_at, version) VALUES
+INSERT INTO users (id, o_auth_provider, o_auth_id, email, name, metadata, preferred_language_id, created_at, updated_at, version) VALUES
 	-- Default Mock System User (Offline Bypass Sandbox!) -> SITE_MANAGER (Volt & Vine Seattle)
-	('00000000-0000-0000-0000-000000000000', 'google', 'user-oauth-id-mock', 'hanna-mock@rmcguinness.altostrat.com', 'Hanna (Mock)', '{"title": "Volt & Vine Seattle Store Operations Manager"}', NOW(), NOW(), 1),
+	('00000000-0000-0000-0000-000000000000', 'google', 'user-oauth-id-mock', 'hanna-mock@rmcguinness.altostrat.com', 'Hanna (Mock)', '{"title": "Volt & Vine Seattle Store Operations Manager"}', 'a0000000-0000-0000-0000-000000000001', NOW(), NOW(), 1),
 	-- Floor Associate (Hanna) -> SITE_ASSOCIATE
-	('88888888-8888-8888-8888-888888880001', 'google', 'user-oauth-id-hanna', 'hanna@rmcguinness.altostrat.com', 'Hanna', '{"title": "Senior Cashier & Replenishment Specialist"}', NOW(), NOW(), 1),
+	('88888888-8888-8888-8888-888888880001', 'google', 'user-oauth-id-hanna', 'hanna@rmcguinness.altostrat.com', 'Hanna', '{"title": "Senior Cashier & Replenishment Specialist"}', 'a0000000-0000-0000-0000-000000000001', NOW(), NOW(), 1),
 	-- Shift Supervisor (Ryan) -> ADMIN (Global Master Systems Administrator)
-	('b75c1a02-c884-40ed-a3f8-8b95f3ff7539', 'google', 'user-oauth-id-ryan', 'ryan@rmcguinness.altostrat.com', 'Ryan', '{"title": "Corporate Master Systems Administrator"}', NOW(), NOW(), 1),
+	('b75c1a02-c884-40ed-a3f8-8b95f3ff7539', 'google', 'user-oauth-id-ryan', 'ryan@rmcguinness.altostrat.com', 'Ryan', '{"title": "Corporate Master Systems Administrator"}', 'a0000000-0000-0000-0000-000000000001', NOW(), NOW(), 1),
 	-- Coworker Associate (Jenna) -> SITE_MANAGER (OmniMart Dallas)
-	('88888888-8888-8888-8888-888888880003', 'google', 'user-oauth-id-jenna', 'jenna@rmcguinness.altostrat.com', 'Jenna', '{"title": "OmniMart Dallas Store Operations Manager"}', NOW(), NOW(), 1),
+	('88888888-8888-8888-8888-888888880003', 'google', 'user-oauth-id-jenna', 'jenna@rmcguinness.altostrat.com', 'Jenna', '{"title": "OmniMart Dallas Store Operations Manager"}', 'a0000000-0000-0000-0000-000000000001', NOW(), NOW(), 1),
 	-- Southwest Regional Director (Marcus) -> REGION_MANAGER
-	('88888888-8888-8888-8888-888888880004', 'google', 'user-oauth-id-marcus', 'marcus@rmcguinness.altostrat.com', 'Marcus', '{"title": "OmniMart Southwest Regional Operations Director"}', NOW(), NOW(), 1);
+	('88888888-8888-8888-8888-888888880004', 'google', 'user-oauth-id-marcus', 'marcus@rmcguinness.altostrat.com', 'Marcus', '{"title": "OmniMart Southwest Regional Operations Director"}', 'a0000000-0000-0000-0000-000000000002', NOW(), NOW(), 1);
 
 -- 3. Map Users to Roles
 INSERT INTO user_roles (user_id, role_id) VALUES
@@ -155,3 +155,8 @@ INSERT INTO tasks (id, name, description, task_type, priority, step_order, estim
 	
 	-- Template C: Out-of-stock shelf items replenishment
 	('d000fa66-0000-0000-0000-000000000000', 'Aisle 7 Empty Stockout Shelf Replenishment Run', 'Aisle 7 paper towels shelf reports stockout under spatial sensor grids. Replenish from backup inventory cage.', 'STANDARD', 2, 0, 15, '[{"step": 1, "action": "Locate pallet backup count in Receiving Cage B", "required": true}, {"step": 2, "action": "Use store jack to transport carton pallet to Aisle 7", "required": true}, {"step": 3, "action": "Stock display shelves and face front items flush", "required": true}, {"step": 4, "action": "Scan display barcode tag using handset to sign off", "required": true}]', '{}', NOW(), NOW(), 1);
+
+-- 11. Seed Cash Drawer Asset for Ryan's Seattle Store
+INSERT INTO assets (id, location_id, name, asset_tag, status, metadata, created_at, updated_at, version) VALUES
+	('ca54ce11-0000-0000-0000-000000000004', '44444444-4444-4444-4444-444444440000', 'Register Terminal Cash Drawer 4', 'TAG-CASH-DRAWER-4', 'AVAILABLE', '{}', NOW(), NOW(), 1)
+	ON CONFLICT (id) DO NOTHING;

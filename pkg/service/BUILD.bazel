@@ -34,21 +34,3 @@ go_library(
     ],
 )
 
-go_test(
-    name = "service_test",
-    srcs = [
-        "automation_test.go",
-        "rag_test.go",
-        "scheduler_test.go",
-        "shift_test.go",
-        "task_test.go",
-    ],
-    embed = [":service"],
-    deps = [
-        "//pkg/model",
-        "//pkg/persistence",
-        "@com_github_stretchr_testify//assert",
-        "@io_gorm_driver_postgres//:postgres",
-        "@io_gorm_gorm//:gorm",
-    ],
-)

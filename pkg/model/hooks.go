@@ -36,10 +36,22 @@ func (e *TaskExecution) AfterUpdate(tx *gorm.DB) (err error) {
 		return err
 	}
 
+	// Determine dynamic action type based on state transitions
+	action := "STATUS_TRANSITION"
+	if e.Status == "IN_PROGRESS" && e.PausedAt == nil && e.TotalPausedSeconds == 0 {
+		action = "TASK_STARTED"
+	} else if e.Status == "PAUSED" {
+		action = "TASK_PAUSED"
+	} else if e.Status == "IN_PROGRESS" && e.PausedAt == nil && e.TotalPausedSeconds > 0 {
+		action = "TASK_RESUMED"
+	} else if e.Status == "COMPLETED" {
+		action = "TASK_COMPLETED"
+	}
+
 	audit := TaskExecutionAudit{
 		TaskExecutionID: e.ID,
 		ChangedByID:     changedByID,
-		ActionType:      "STATUS_TRANSITION",
+		ActionType:      action,
 		NewState:        JSONB(newStateBytes),
 	}
 

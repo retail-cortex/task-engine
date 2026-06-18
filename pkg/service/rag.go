@@ -58,7 +58,8 @@ func (g *defaultEmbeddingGenerator) GenerateEmbeddings(ctx context.Context, text
 	return vector, nil
 }
 
-type httpClient interface {
+// HTTPClient represents an HTTP client interface used by the RAG service.
+type HTTPClient interface {
 	Get(url string) (*http.Response, error)
 	Head(url string) (*http.Response, error)
 }
@@ -86,6 +87,7 @@ type RAGService interface {
 
 	// CheckSOPUpdates checks ETag, Last-Modified, or SHA fingerprints to evaluate database configuration drift.
 	CheckSOPUpdates(ctx context.Context, sopID string) (bool, error)
+	ProcessSOPPipeline(ctx context.Context, sopID, processID string)
 	GetSOPByID(ctx context.Context, id string) (*model.SOP, error)
 	ListSOPs(ctx context.Context) ([]*model.SOP, error)
 	ListSOPsRange(ctx context.Context, offset, limit int) ([]*model.SOP, error)
@@ -99,19 +101,24 @@ type RAGService interface {
 type ragService struct {
 	sopRepo      persistence.SOPRepository
 	embeddingGen EmbeddingGenerator
-	httpClient   httpClient
+	httpClient   HTTPClient
 }
 
 // NewRAGService instantiates a new RAGService.
 func NewRAGService(sopRepo persistence.SOPRepository, embeddingGen EmbeddingGenerator) RAGService {
+	return NewRAGServiceWithClient(sopRepo, embeddingGen, &defaultHTTPClient{
+		client: &http.Client{
+			Timeout: 15 * time.Second,
+		},
+	})
+}
+
+// NewRAGServiceWithClient instantiates a new RAGService with a custom HTTP client.
+func NewRAGServiceWithClient(sopRepo persistence.SOPRepository, embeddingGen EmbeddingGenerator, client HTTPClient) RAGService {
 	return &ragService{
 		sopRepo:      sopRepo,
 		embeddingGen: embeddingGen,
-		httpClient: &defaultHTTPClient{
-			client: &http.Client{
-				Timeout: 15 * time.Second,
-			},
-		},
+		httpClient:   client,
 	}
 }
 
@@ -157,7 +164,7 @@ func (s *ragService) IngestSOPAsync(ctx context.Context, title string, canonical
 	}
 
 	// Trigger processing pipeline asynchronously
-	go s.processSOPPipeline(context.Background(), sop.ID, process.ID)
+	go s.ProcessSOPPipeline(context.Background(), sop.ID, process.ID)
 
 	return sop, process, nil
 }
@@ -248,7 +255,7 @@ func (s *ragService) CheckSOPUpdates(ctx context.Context, sopID string) (bool, e
 			return false, fmt.Errorf("failed to start refreshed process grid: %w", err)
 		}
 
-		go s.processSOPPipeline(context.Background(), sop.ID, process.ID)
+		go s.ProcessSOPPipeline(context.Background(), sop.ID, process.ID)
 		return true, nil
 	}
 
@@ -263,7 +270,7 @@ func (s *ragService) CheckSOPUpdates(ctx context.Context, sopID string) (bool, e
 	return false, nil
 }
 
-func (s *ragService) processSOPPipeline(ctx context.Context, sopID, processID string) {
+func (s *ragService) ProcessSOPPipeline(ctx context.Context, sopID, processID string) {
 	sop, err := s.sopRepo.FindByID(ctx, sopID)
 	if err != nil || sop == nil || sop.ID == "" {
 		if err == nil {
@@ -337,6 +344,10 @@ func (s *ragService) processSOPPipeline(ctx context.Context, sopID, processID st
 	text := extractSOPText(bodyBytes, fileType)
 
 	// 4. Fixed character slice chunking & Vector embedding extraction
+	if s.embeddingGen == nil {
+		s.failProcess(ctx, processID, errors.New("embedding generator is not configured"))
+		return
+	}
 	var chunks []*model.SOPChunk
 	chunkSize := 500
 	runes := []rune(text)
@@ -395,7 +406,7 @@ func (s *ragService) processSOPPipeline(ctx context.Context, sopID, processID st
 
 	// 7. Update status to COMPLETED
 	process, err := s.sopRepo.FindProcessByID(ctx, processID)
-	if err != nil {
+	if err != nil || process == nil {
 		return
 	}
 	process.Status = "COMPLETED"
@@ -405,7 +416,7 @@ func (s *ragService) processSOPPipeline(ctx context.Context, sopID, processID st
 
 func (s *ragService) failProcess(ctx context.Context, id string, err error) {
 	process, queryErr := s.sopRepo.FindProcessByID(ctx, id)
-	if queryErr != nil {
+	if queryErr != nil || process == nil {
 		return
 	}
 	// Map database process errors as transient diagnostic messages

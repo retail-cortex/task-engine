@@ -1,0 +1,13 @@
+Gemma Model Roster
+==================
+
+Gemma Model
+Copyright (c) 2024 Google LLC
+
+This directory contains the Gemma 2B Instruction-Tuned (IT) open-weights model in MediaPipe / TensorFlow Lite 4-bit quantized format (gemma-2b-it-gpu-int4.bin).
+
+Developed by Google DeepMind and Google LLC.
+
+These weights are licensed under the Gemma Terms of Use (see LICENSE in this directory).
+For technical documentation, specifications, and responsible use guidelines, visit:
+https://ai.google.dev/gemma

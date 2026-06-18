@@ -43,7 +43,6 @@ fun LoginScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var showBypassDialog by remember { mutableStateOf(false) }
 
     // Navigation trigger on success
     LaunchedEffect(uiState) {
@@ -228,69 +227,10 @@ fun LoginScreen(
                 }
             }
 
-            // Bottom: Muted Developer Bypass Link
-            TextButton(
-                onClick = { showBypassDialog = true },
-                colors = ButtonDefaults.textButtonColors(contentColor = GTasksTheme.colors.textMuted)
-            ) {
-                Text(
-                    text = "Trouble signing in? Use Developer Bypass",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    fontSize = 11.sp
-                )
-            }
+            // Bottom Spacer for Layout Balance
+            Spacer(modifier = Modifier.height(30.dp))
         }
     }
 
-    // Glassmorphic Developer Bypass Dialog
-    if (showBypassDialog) {
-        Dialog(onDismissRequest = { showBypassDialog = false }) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .glassmorphic(shape = RoundedCornerShape(24.dp), elevation = 12.dp)
-                    .padding(24.dp)
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "Developer Bypass Portal",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = GTasksTheme.colors.textPrimary,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                    
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        viewModel.seedUsers.forEach { user ->
-                            Button(
-                                onClick = {
-                                    showBypassDialog = false
-                                    viewModel.loginWithBypass(user.uuid)
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = GTasksTheme.colors.bgInput),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth(),
-                                border = BorderStroke(1.dp, GTasksTheme.colors.borderMuted)
-                            ) {
-                                Text(
-                                    text = user.displayName,
-                                    color = GTasksTheme.colors.textPrimary,
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    TextButton(onClick = { showBypassDialog = false }) {
-                        Text("Cancel", color = GTasksTheme.colors.textSecondary)
-                    }
-                }
-            }
-        }
-    }
+
 }

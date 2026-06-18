@@ -36,6 +36,9 @@ type TaskExecution struct {
 	DueAt                   *time.Time `gorm:"default:null"`
 	PrerequisiteExecutionID *string    `gorm:"column:prerequisite_execution_id;type:uuid;index;default:null"`
 	Decision                *string    `gorm:"type:varchar(50);default:null"`
+	StartedAt               *time.Time `gorm:"default:null"`
+	PausedAt                *time.Time `gorm:"default:null"`
+	TotalPausedSeconds      int        `gorm:"not null;default:0"`
 	CompletedAt             *time.Time `gorm:"default:null"`
 	ChecklistState          JSONB      `gorm:"type:jsonb;default:'{}'"`
 	OverrideFlags           JSONB      `gorm:"type:jsonb;not null;default:'{}'"`
@@ -65,7 +68,7 @@ type TaskTrade struct {
 	ID                 string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	TaskExecutionID    string    `gorm:"column:task_execution_id;type:uuid;not null;index"`
 	InitiatorID        string    `gorm:"column:initiator_id;type:uuid;not null;index"`
-	ProposedAssigneeID string    `gorm:"column:proposed_assignee_id;type:uuid;not null;index"`
+	ProposedAssigneeID *string   `gorm:"column:proposed_assignee_id;type:uuid;index;default:null"`
 	Status             string    `gorm:"type:varchar(50);not null;default:'PENDING'"`
 	CreatedAt          time.Time `gorm:"not null;default:now()"`
 	UpdatedAt          time.Time `gorm:"not null;default:now()"`

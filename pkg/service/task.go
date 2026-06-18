@@ -86,33 +86,104 @@ func (s *taskService) UpdateStatus(ctx context.Context, executionID, status, che
 		return fmt.Errorf("failed to find task execution: %w", err)
 	}
 
-	exec.Status = status
-	if status == "COMPLETED" {
-		now := time.Now()
+	now := time.Now()
+	previousStatus := exec.Status
+
+	// 1. Handle Task-Level State Machine Transitions
+	switch status {
+	case "IN_PROGRESS":
+		if previousStatus == "PENDING" {
+			exec.StartedAt = &now
+			exec.Status = "IN_PROGRESS"
+		} else if previousStatus == "PAUSED" {
+			// Resume from Pause
+			if exec.PausedAt != nil {
+				pausedDuration := int(now.Sub(*exec.PausedAt).Seconds())
+				exec.TotalPausedSeconds += pausedDuration
+				exec.PausedAt = nil
+			}
+			exec.Status = "IN_PROGRESS"
+		}
+	case "PAUSED":
+		if previousStatus == "IN_PROGRESS" {
+			exec.PausedAt = &now
+			exec.Status = "PAUSED"
+		}
+	case "COMPLETED":
+		exec.Status = "COMPLETED"
 		exec.CompletedAt = &now
 	}
+
+	// 2. Handle Checklist Step-Level State Updates & SLO Deltas
 	if checklistState != "" {
-		// Try parsing as a single-step delta first to support out-of-order execution safely
+		// Try parsing as a single-step delta first
 		var delta struct {
-			Step      int  `json:"step"`
-			Completed bool `json:"completed"`
+			Step      int    `json:"step"`
+			Action    string `json:"action"` // 'START', 'PAUSE', 'RESUME', 'COMPLETE'
+			Completed bool   `json:"completed"`
 		}
 		if err := json.Unmarshal([]byte(checklistState), &delta); err == nil && delta.Step > 0 {
-			// Load and parse existing checklist from DB
-			var currentChecklist []struct {
-				Step      int    `json:"step"`
-				Action    string `json:"action"`
-				Required  bool   `json:"required"`
-				Completed bool   `json:"completed"`
-			}
+			var currentChecklist []map[string]interface{}
 			if len(exec.ChecklistState) > 0 {
 				if err := json.Unmarshal(exec.ChecklistState, &currentChecklist); err == nil {
 					// Apply the delta to the matched step only
 					updated := false
 					for idx, step := range currentChecklist {
-						if step.Step == delta.Step {
-							currentChecklist[idx].Completed = delta.Completed
-							updated = true
+						stepNum, _ := step["step"].(float64)
+						if int(stepNum) == delta.Step {
+							
+							switch delta.Action {
+							case "START":
+								currentChecklist[idx]["started_at"] = now.Format(time.RFC3339)
+								currentChecklist[idx]["status"] = "IN_PROGRESS"
+								currentChecklist[idx]["completed"] = false
+								updated = true
+							case "PAUSE":
+								currentChecklist[idx]["paused_at"] = now.Format(time.RFC3339)
+								currentChecklist[idx]["status"] = "PAUSED"
+								updated = true
+							case "RESUME":
+								if pausedAtStr, ok := step["paused_at"].(string); ok && pausedAtStr != "" {
+									if pausedAt, err := time.Parse(time.RFC3339, pausedAtStr); err == nil {
+										pausedSec := int(now.Sub(pausedAt).Seconds())
+										
+										currentSec := 0
+										if cs, ok := step["total_paused_seconds"].(float64); ok {
+											currentSec = int(cs)
+										}
+										currentChecklist[idx]["total_paused_seconds"] = currentSec + pausedSec
+									}
+								}
+								currentChecklist[idx]["paused_at"] = nil
+								currentChecklist[idx]["status"] = "IN_PROGRESS"
+								updated = true
+							case "COMPLETE":
+								currentChecklist[idx]["completed_at"] = now.Format(time.RFC3339)
+								currentChecklist[idx]["completed_by_id"] = userID
+								currentChecklist[idx]["completed"] = true
+								currentChecklist[idx]["status"] = "COMPLETED"
+								updated = true
+
+								// Calculate Step SLO Delta
+								if startedStr, ok := step["started_at"].(string); ok && startedStr != "" {
+									if started, err := time.Parse(time.RFC3339, startedStr); err == nil {
+										totalSec := int(now.Sub(started).Seconds())
+										
+										pausedSec := 0
+										if ps, ok := step["total_paused_seconds"].(float64); ok {
+											pausedSec = int(ps)
+										}
+										netSec := totalSec - pausedSec
+										
+										// Compare against step SLO (default to 60s if not specified)
+										sloSec := 60
+										if slo, ok := step["slo_seconds"].(float64); ok {
+											sloSec = int(slo)
+										}
+										currentChecklist[idx]["slo_delta_seconds"] = netSec - sloSec
+									}
+								}
+							}
 							break
 						}
 					}
@@ -188,10 +259,15 @@ func (s *taskService) ProposeTrade(ctx context.Context, executionID, proposedAss
 		return errors.New("task is already pending a trade proposal")
 	}
 
+	var proposedAssignee *string
+	if proposedAssigneeID != "" {
+		proposedAssignee = &proposedAssigneeID
+	}
+
 	trade := &model.TaskTrade{
 		TaskExecutionID:    executionID,
 		InitiatorID:        initiatorID,
-		ProposedAssigneeID: proposedAssigneeID,
+		ProposedAssigneeID: proposedAssignee,
 		Status:             "PENDING",
 	}
 
@@ -225,7 +301,7 @@ func (s *taskService) ApproveTrade(ctx context.Context, tradeID, supervisorID st
 	}
 
 	// Performs physical handover
-	exec.AssigneeID = &trade.ProposedAssigneeID
+	exec.AssigneeID = trade.ProposedAssigneeID
 	exec.Status = "PENDING"
 
 	if err := s.execRepo.Update(ctxWithUser, exec); err != nil {
@@ -252,7 +328,7 @@ func (s *taskService) AcceptTrade(ctx context.Context, tradeID, targetUserID str
 		return errors.New("trade request is not pending")
 	}
 
-	if trade.ProposedAssigneeID != targetUserID {
+	if trade.ProposedAssigneeID == nil || *trade.ProposedAssigneeID != targetUserID {
 		return errors.New("only the proposed colleague can accept this task trade")
 	}
 
@@ -262,7 +338,7 @@ func (s *taskService) AcceptTrade(ctx context.Context, tradeID, targetUserID str
 	}
 
 	// Performs physical handover
-	exec.AssigneeID = &trade.ProposedAssigneeID
+	exec.AssigneeID = trade.ProposedAssigneeID
 
 	// Reset status back to PENDING (or IN_PROGRESS if steps were completed)
 	hasCompletedSteps := false
@@ -303,7 +379,7 @@ func (s *taskService) RejectTrade(ctx context.Context, tradeID, targetUserID str
 		return errors.New("trade request is not pending")
 	}
 
-	if trade.ProposedAssigneeID != targetUserID {
+	if trade.ProposedAssigneeID == nil || *trade.ProposedAssigneeID != targetUserID {
 		return errors.New("only the proposed colleague can reject this task trade")
 	}
 
@@ -369,6 +445,10 @@ func (s *taskService) ClaimTask(ctx context.Context, executionID, userID string,
 		isAuthorized := false
 		if trade.InitiatorID == userID {
 			isAuthorized = true
+		} else if trade.ProposedAssigneeID == nil || *trade.ProposedAssigneeID == "" {
+			isAuthorized = true
+		} else if *trade.ProposedAssigneeID == userID {
+			isAuthorized = true
 		} else if exec.Task.TargetRoleID == nil || *exec.Task.TargetRoleID == "" {
 			isAuthorized = true
 		} else {
@@ -381,7 +461,7 @@ func (s *taskService) ClaimTask(ctx context.Context, executionID, userID string,
 		}
 
 		if !isAuthorized {
-			return errors.New("unauthorized: you do not possess the eligible operational role required to take this task")
+			return errors.New("unauthorized: you are not eligible to claim this task trade")
 		}
 	} else {
 		// If it is a standard open task, we validate:
@@ -434,7 +514,9 @@ func (s *taskService) ClaimTask(ctx context.Context, executionID, userID string,
 	// 6. If it was a trade, close the trade record
 	if trade != nil {
 		trade.Status = "APPROVED"
-		trade.ProposedAssigneeID = userID
+		if trade.ProposedAssigneeID == nil || *trade.ProposedAssigneeID == "" {
+			trade.ProposedAssigneeID = &userID
+		}
 		return s.execRepo.UpdateTrade(ctxWithUser, trade)
 	}
 

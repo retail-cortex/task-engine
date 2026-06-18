@@ -34,6 +34,15 @@ export interface TaskExecution {
   locked_by?: string;
   locked_at?: string;
   assignee_id?: string;
+  Assignee?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  started_at?: string;
+  paused_at?: string;
+  total_paused_seconds: number;
+  completed_at?: string;
   retry_count: number;
   max_retries: number;
   last_error?: string;
@@ -45,6 +54,14 @@ export interface ChecklistStep {
   action: string;
   required: boolean;
   completed?: boolean;
+  status?: string;
+  started_at?: string;
+  paused_at?: string;
+  total_paused_seconds?: number;
+  completed_at?: string;
+  completed_by_id?: string;
+  slo_seconds?: number;
+  slo_delta_seconds?: number;
 }
 
 export interface ChatMessage {

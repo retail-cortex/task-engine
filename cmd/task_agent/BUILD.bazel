@@ -31,6 +31,7 @@ py_binary(
 
 py_test(
     name = "test_config",
+    size = "small",
     srcs = ["tests/test_config.py"],
     imports = ["."],  # Support local directory imports
     deps = [
@@ -40,6 +41,7 @@ py_test(
 
 py_test(
     name = "test_agent",
+    size = "small",
     srcs = ["tests/test_agent.py"],
     imports = ["."],  # Support local directory imports
     deps = [
@@ -49,6 +51,7 @@ py_test(
 
 py_test(
     name = "test_a2ui_transpiler",
+    size = "small",
     srcs = ["tests/test_a2ui_transpiler.py"],
     imports = ["."],  # Support local directory imports
     deps = [

@@ -22,7 +22,7 @@ class LocalGemmaEngine(private val context: Context) : LlmReasoningEngine {
     
     companion object {
         private const val TAG = "LocalGemmaEngine"
-        private const val MODEL_FILENAME = "gemma-2b-it.bin"
+        private const val MODEL_FILENAME = "gemma-2b-it-gpu-int4.bin"
     }
 
     init {
@@ -33,11 +33,37 @@ class LocalGemmaEngine(private val context: Context) : LlmReasoningEngine {
     fun initialize() {
         val modelFile = File(context.filesDir, MODEL_FILENAME)
         if (!modelFile.exists()) {
-            val missingMsg = "Local Gemma model not found. Copy '$MODEL_FILENAME' to the app files directory to enable offline reasoning: ${context.filesDir.absolutePath}"
-            Log.w(TAG, missingMsg)
-            _statusMessage.value = missingMsg
-            _isReady.value = false
-            return
+            // Check if the model is packaged in the APK assets
+            val hasAsset = try {
+                context.assets.list("")?.contains(MODEL_FILENAME) == true
+            } catch (e: Exception) {
+                false
+            }
+
+            if (hasAsset) {
+                try {
+                    _statusMessage.value = "Extracting Gemma model from assets (this only happens once)..."
+                    Log.i(TAG, "Extracting $MODEL_FILENAME from assets to filesDir...")
+                    context.assets.open(MODEL_FILENAME).use { input ->
+                        modelFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Log.i(TAG, "Gemma model extraction completed successfully.")
+                } catch (e: Exception) {
+                    val extractError = "Failed to extract Gemma from assets: ${e.localizedMessage}"
+                    Log.e(TAG, extractError, e)
+                    _statusMessage.value = extractError
+                    _isReady.value = false
+                    return
+                }
+            } else {
+                val missingMsg = "Local Gemma model not found. Copy '$MODEL_FILENAME' to the app files directory to enable offline reasoning: ${context.filesDir.absolutePath}"
+                Log.w(TAG, missingMsg)
+                _statusMessage.value = missingMsg
+                _isReady.value = false
+                return
+            }
         }
 
         try {

@@ -31,6 +31,7 @@ The workspace follows the standard Go project layout (`/cmd`, `/internal`, `/pkg
 | [`/pkg/agents`](file:///Users/rmcguinness/Projects/internal/gemini_task_engine/pkg/agents) | Gemini Model Context Protocol (MCP) agent tool implementations. |
 | [`/web/console`](file:///Users/rmcguinness/Projects/internal/gemini_task_engine/web/console) | React-based Admin Operations Dashboard built using pnpm, Vite, and TypeScript. |
 | [`/web/render-test`](file:///Users/rmcguinness/Projects/internal/gemini_task_engine/web/render-test) | React-based rendering validation workbench. |
+| [`/apps/gtasks`](file:///Users/rmcguinness/Projects/internal/gemini_task_engine/apps/gtasks) | Native Android associate portal app (Kotlin/Compose). |
 | [`/docs`](file:///Users/rmcguinness/Projects/internal/gemini_task_engine/docs) | Core architecture diagrams, specs, and schemas. |
 
 ---
@@ -82,7 +83,26 @@ bazel run //docs:serve
 ```
 - **Documentation Server:** Serves at `http://localhost:1313/`
 
-### 4. Independent Component Builds & Tests
+### 4. Native Android Handset App (GTasks)
+The native Android app is located in `/apps/gtasks`. It communicates with the Go API Gateway and serves as the primary task execution portal for storefront associates.
+
+* **Open in Android Studio:** Open the `/apps/gtasks` subdirectory directly in Android Studio to enable full Gradle indexing.
+* **Compile via Bazel:**
+  ```bash
+  bazel build //apps/gtasks:build
+  ```
+* **Install on Connected Device/Emulator (via ADB):**
+  ```bash
+  adb install -r apps/gtasks/app/build/outputs/apk/debug/app-debug.apk
+  ```
+* **Tunnel API Traffic for Physical USB Devices:**
+  ```bash
+  adb reverse tcp:8080 tcp:8080
+  ```
+
+For a step-by-step setup guide covering developer certificates, OAuth 2.0 client IDs, and Android Studio SDK configurations, read the **[Android Handset App Guide](docs/content/docs/android_setup.md)** and the **[Google Cloud & OAuth Setup Guide](docs/content/docs/cloud_setup.md)**.
+
+### 5. Independent Component Builds & Tests
 
 #### Build & Test the Backend Server
 ```bash

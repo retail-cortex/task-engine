@@ -20,6 +20,7 @@ import OperationsCenter from './components/OperationsCenter';
 import ShiftCoach from './components/ShiftCoach';
 import OfflineOverlay from './components/OfflineOverlay';
 import AdminPanel from './components/AdminPanel';
+import WorkforceAnalytics from './components/WorkforceAnalytics';
 import { useAppContext } from './contexts/AppContext';
 import { useTaskManagement } from './hooks/useTaskManagement';
 import { useChatOrchestrator } from './hooks/useChatOrchestrator';
@@ -174,10 +175,13 @@ const App: React.FC = () => {
         selectedRoleFilter={selectedRoleFilter}
         onRoleFilterChange={(role) => setSelectedRoleFilter(role)}
         onNavigateToAdmin={() => setCurrentPage('admin')}
+        onNavigateToAnalytics={() => setCurrentPage('analytics')}
       />
 
       {currentPage === 'admin' ? (
         <AdminPanel onExit={() => setCurrentPage('dashboard')} />
+      ) : currentPage === 'analytics' ? (
+        <WorkforceAnalytics tasks={tasks} onExit={() => setCurrentPage('dashboard')} />
       ) : (
         <main className="dashboard-grid">
           {/* 2. Left operational task queues column */}

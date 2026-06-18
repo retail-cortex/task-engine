@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -52,6 +53,18 @@ fun GTasksNavigation(appContainer: com.google.gtasks.di.AppContainer) {
     val isLoggedIn by appContainer.authRepository.isLoggedIn.collectAsState()
     val activeSiteId = appContainer.authRepository.activeSiteId
     
+    // Reactively force navigation to login screen if the user becomes logged out (e.g. 401 Unauthorized)
+    LaunchedEffect(isLoggedIn) {
+        if (!isLoggedIn) {
+            val currentRoute = navController.currentDestination?.route
+            if (currentRoute != null && currentRoute != "login") {
+                navController.navigate("login") {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
+        }
+    }
+
     val startDestination = when {
         !isLoggedIn -> "login"
         activeSiteId == null -> "store-context"
@@ -96,7 +109,10 @@ fun GTasksNavigation(appContainer: com.google.gtasks.di.AppContainer) {
                     navController.navigate("chat")
                 },
                 onLogout = {
-                    navController.navigate("login") {
+                    appContainer.authRepository.logout()
+                },
+                onChangeSite = {
+                    navController.navigate("store-context") {
                         popUpTo("tasks") { inclusive = true }
                     }
                 },

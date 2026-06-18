@@ -47,13 +47,9 @@ class TaskListViewModel(
     val activeRoleName: String get() = authRepository.currentUser.value?.roles?.firstOrNull()?.name ?: "SITE_ASSOCIATE"
     val currentUserId: String get() = authRepository.activeUserId ?: ""
 
-    // Seeds representing other colleagues in the active store to select for trades
-    val colleagues = listOf(
-        Colleague("20e8ddca-7ade-49dd-b4b8-310c36e4c486", "Seattle Cashier", "Cashier"),
-        StringColleague("b5a2c5ec-8b21-40e6-a8cc-79cc7dda87fb", "Arlington Stocker", "Stock Associate"),
-        StringColleague("ef912d7b-7095-4e93-aeeb-ed4a7d339883", "New Orleans Cashier", "Cashier"),
-        StringColleague("b75c1a02-c884-40ed-a3f8-8b95f3ff7539", "Dallas Manager (Ryan)", "Store Manager")
-    ).filter { it.id != currentUserId } // Exclude yourself
+    // Active colleagues in the store fetched dynamically from backend
+    private val _colleagues = MutableStateFlow<List<Colleague>>(emptyList())
+    val colleagues: StateFlow<List<Colleague>> = _colleagues.asStateFlow()
 
     init {
         loadData()
@@ -153,26 +149,47 @@ class TaskListViewModel(
                 // 3. Fetch pending trades
                 val tradesResult = taskRepository.getPendingTrades(siteId)
 
-                assignedResult.onSuccess { tasks ->
-                    _assignedTasks.value = tasks
-                }.onFailure { e ->
-                    _errorMessage.value = "Failed to load your tasks: ${e.localizedMessage}"
-                }
+                // 4. Fetch store associates dynamically!
+                val associatesResult = taskRepository.getSiteAssociates(siteId)
 
-                siteTasksResult.onSuccess { tasks ->
-                    // Available tasks are active tasks where the assignee is unassigned (null or empty)
-                    val unassigned = tasks.filter { it.assigneeID.isNullOrEmpty() }
-                    _availableTasks.value = unassigned
-                }.onFailure { e ->
-                    if (_errorMessage.value == null) {
-                        _errorMessage.value = "Failed to load store available tasks: ${e.localizedMessage}"
+                // Update dynamic colleagues list
+                associatesResult.onSuccess { users ->
+                    val mapped = users.filter { it.id != userId }.map { user ->
+                        Colleague(
+                            id = user.id,
+                            name = user.name ?: "Unknown Associate",
+                            roleName = user.roles.firstOrNull()?.name ?: "Associate"
+                        )
                     }
+                    _colleagues.value = mapped
                 }
 
-                tradesResult.onSuccess { trades ->
-                    _pendingTrades.value = trades
-                }.onFailure { e ->
-                    // Fail silently or log (trades are secondary to core task queues)
+                // Cross-reference tasks with trades to cleanly populate Available vs Trades tabs
+                if (assignedResult.isSuccess && siteTasksResult.isSuccess && tradesResult.isSuccess) {
+                    val assigned = assignedResult.getOrThrow()
+                    val siteTasks = siteTasksResult.getOrThrow()
+                    val trades = tradesResult.getOrThrow()
+
+                    // 1. Assigned Tasks ("My Work"): assigned to you, and not pending a trade swap
+                    val activeAssigned = assigned.filter { it.status != "TRADE_PENDING" }
+                    _assignedTasks.value = activeAssigned
+
+                    // 2. Available Tasks: unassigned standard tasks, OR open pool trades from others
+                    val available = siteTasks.filter { task ->
+                        task.assigneeID.isNullOrEmpty() || (
+                            task.status == "TRADE_PENDING" &&
+                            task.assigneeID != userId &&
+                            trades.any { it.taskExecutionId == task.id && it.status == "PENDING" && it.proposedAssigneeId.isNullOrEmpty() }
+                        )
+                    }
+                    _availableTasks.value = available
+
+                    // 3. Pending Trades: trades offered specifically to you
+                    val directedTrades = trades.filter { it.proposedAssigneeId == userId && it.status == "PENDING" }
+                    _pendingTrades.value = directedTrades
+                } else {
+                    assignedResult.onFailure { e -> _errorMessage.value = "Failed loading your tasks: ${e.localizedMessage}" }
+                    siteTasksResult.onFailure { e -> _errorMessage.value = "Failed loading store queue: ${e.localizedMessage}" }
                 }
 
             } catch (e: Exception) {

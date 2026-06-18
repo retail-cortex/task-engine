@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
@@ -44,9 +45,26 @@ class TaskDetailViewModel(
     val siteName: String
         get() = authRepository.activeSiteName ?: "Unknown Store"
 
-    fun loadTaskDetails(executionId: String) {
-        _uiState.value = TaskDetailUiState.Loading
+    fun loadTaskDetails(executionId: String, silent: Boolean = false) {
+        if (!silent) {
+            _uiState.value = TaskDetailUiState.Loading
+        }
         viewModelScope.launch {
+            // Fetch active on-shift colleagues in parallel
+            launch {
+                val associatesResult = taskRepository.getSiteAssociates(siteId)
+                associatesResult.onSuccess { users ->
+                    val mapped = users.filter { it.id != currentUserId }.map { user ->
+                        Colleague(
+                            id = user.id,
+                            name = user.name ?: "Unknown Associate",
+                            roleName = user.roles.firstOrNull()?.name ?: "Associate"
+                        )
+                    }
+                    _colleagues.value = mapped
+                }
+            }
+
             val result = taskRepository.getSiteTasks(siteId)
             result.onSuccess { tasks ->
                 val task = tasks.find { it.id == executionId }
@@ -72,35 +90,82 @@ class TaskDetailViewModel(
         _isCompletable.value = allRequiredDone && checklist.isNotEmpty()
     }
 
-    /**
-     * Toggles a checklist step completion state and immediately synchronizes the new state to the database!
-     */
-    fun toggleChecklistItem(executionId: String, stepIndex: Int) {
-        val index = checklist.indexOfFirst { it.step == stepIndex }
-        if (index == -1) return
+    // --- Task-Level State Machine Drivers ---
 
-        val item = checklist[index]
-        val nowStr = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }.format(Date())
-
-        val updatedItem = item.copy(
-            completed = !item.completed,
-            completedAt = if (!item.completed) nowStr else null
-        )
-        
-        checklist[index] = updatedItem
-        checkIfCompletable()
-
-        // Sync back to database immediately (marking as IN_PROGRESS to preserve state)
+    fun startTask(executionId: String) {
         viewModelScope.launch {
-            val checklistJson = Json.encodeToString(checklist.toList())
-            taskRepository.updateTaskStatus(
-                siteId = siteId,
-                executionId = executionId,
-                status = "IN_PROGRESS",
-                checklistStateJson = checklistJson
-            )
+            _isSubmitting.value = true
+            val result = taskRepository.updateTaskStatus(siteId, executionId, "IN_PROGRESS", "")
+            _isSubmitting.value = false
+            result.onSuccess {
+                loadTaskDetails(executionId, silent = true)
+            }.onFailure { error ->
+                _uiState.value = TaskDetailUiState.Error(error.localizedMessage ?: "Failed starting task")
+            }
+        }
+    }
+
+    fun pauseTask(executionId: String) {
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            val result = taskRepository.updateTaskStatus(siteId, executionId, "PAUSED", "")
+            _isSubmitting.value = false
+            result.onSuccess {
+                loadTaskDetails(executionId, silent = true)
+            }.onFailure { error ->
+                _uiState.value = TaskDetailUiState.Error(error.localizedMessage ?: "Failed pausing task")
+            }
+        }
+    }
+
+    fun resumeTask(executionId: String) {
+        viewModelScope.launch {
+            _isSubmitting.value = true
+            val result = taskRepository.updateTaskStatus(siteId, executionId, "IN_PROGRESS", "")
+            _isSubmitting.value = false
+            result.onSuccess {
+                loadTaskDetails(executionId, silent = true)
+            }.onFailure { error ->
+                _uiState.value = TaskDetailUiState.Error(error.localizedMessage ?: "Failed resuming task")
+            }
+        }
+    }
+
+    // --- Step-Level State Machine Drivers (Option A) ---
+
+    fun startStep(executionId: String, stepIndex: Int) {
+        viewModelScope.launch {
+            val delta = ChecklistDelta(step = stepIndex, action = "START", completed = false)
+            val deltaJson = Json.encodeToString(delta)
+            taskRepository.updateTaskStatus(siteId, executionId, "IN_PROGRESS", deltaJson)
+            loadTaskDetails(executionId, silent = true)
+        }
+    }
+
+    fun pauseStep(executionId: String, stepIndex: Int) {
+        viewModelScope.launch {
+            val delta = ChecklistDelta(step = stepIndex, action = "PAUSE", completed = false)
+            val deltaJson = Json.encodeToString(delta)
+            taskRepository.updateTaskStatus(siteId, executionId, "IN_PROGRESS", deltaJson)
+            loadTaskDetails(executionId, silent = true)
+        }
+    }
+
+    fun resumeStep(executionId: String, stepIndex: Int) {
+        viewModelScope.launch {
+            val delta = ChecklistDelta(step = stepIndex, action = "RESUME", completed = false)
+            val deltaJson = Json.encodeToString(delta)
+            taskRepository.updateTaskStatus(siteId, executionId, "IN_PROGRESS", deltaJson)
+            loadTaskDetails(executionId, silent = true)
+        }
+    }
+
+    fun completeStep(executionId: String, stepIndex: Int) {
+        viewModelScope.launch {
+            val delta = ChecklistDelta(step = stepIndex, action = "COMPLETE", completed = true)
+            val deltaJson = Json.encodeToString(delta)
+            taskRepository.updateTaskStatus(siteId, executionId, "IN_PROGRESS", deltaJson)
+            loadTaskDetails(executionId, silent = true)
         }
     }
 
@@ -142,7 +207,7 @@ class TaskDetailViewModel(
             _isSubmitting.value = false
             result.onSuccess {
                 // Reload details to reflect override
-                loadTaskDetails(executionId)
+                loadTaskDetails(executionId, silent = true)
             }.onFailure { error ->
                 _uiState.value = TaskDetailUiState.Error(error.localizedMessage ?: "Failed submitting override")
             }
@@ -151,12 +216,12 @@ class TaskDetailViewModel(
 
     val currentUserId: String get() = authRepository.activeUserId ?: ""
 
-    val colleagues = listOf(
-        Colleague("20e8ddca-7ade-49dd-b4b8-310c36e4c486", "Seattle Cashier", "Cashier"),
-        Colleague("b5a2c5ec-8b21-40e6-a8cc-79cc7dda87fb", "Arlington Stocker", "Stock Associate"),
-        Colleague("ef912d7b-7095-4e93-aeeb-ed4a7d339883", "New Orleans Cashier", "Cashier"),
-        Colleague("b75c1a02-c884-40ed-a3f8-8b95f3ff7539", "Dallas Manager (Ryan)", "Store Manager")
-    ).filter { it.id != currentUserId }
+    val activeRoleName: String
+        get() = authRepository.currentUser.value?.roles?.firstOrNull()?.name ?: "SITE_ASSOCIATE"
+
+    // Active colleagues in the store fetched dynamically from backend
+    private val _colleagues = MutableStateFlow<List<Colleague>>(emptyList())
+    val colleagues: StateFlow<List<Colleague>> = _colleagues.asStateFlow()
 
     fun proposeTrade(taskExecutionId: String, colleagueId: String, onSuccess: () -> Unit) {
         viewModelScope.launch {
@@ -188,3 +253,10 @@ sealed interface TaskDetailUiState {
     data class Success(val task: TaskExecution) : TaskDetailUiState
     data class Error(val message: String) : TaskDetailUiState
 }
+
+@Serializable
+data class ChecklistDelta(
+    val step: Int,
+    val action: String,
+    val completed: Boolean
+)

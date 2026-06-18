@@ -25,7 +25,11 @@ class AppContainer(private val context: Context) {
 
     // 2. Repositories
     val authRepository: AuthRepository by lazy {
-        AuthRepository(context, apiClient)
+        AuthRepository(context, apiClient).also { authRepo ->
+            apiClient.onUnauthorizedListener = {
+                authRepo.logout()
+            }
+        }
     }
 
     val taskRepository: TaskRepository by lazy {

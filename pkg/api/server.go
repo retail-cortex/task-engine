@@ -262,6 +262,7 @@ func (s *Server) setupRoutes() {
 
 		// Site-level tasks
 		orgs.GET("/sites/:siteId/tasks", s.operationalHandler.GetSiteTasks)
+		orgs.GET("/sites/:siteId/associates", s.operationalHandler.GetSiteAssociates)
 
 		// User-level tasks
 		orgs.GET("/sites/:siteId/users/:userId/tasks", s.operationalHandler.GetUserSiteTasks)

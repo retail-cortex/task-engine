@@ -29,5 +29,7 @@ sh_binary(
             "app/build/**/*",
             ".gradle/**/*",
         ],
-    ),
+    ) + [
+        "//third_party/gemma:gemma-2b-it-gpu-int4.bin",
+    ],
 )

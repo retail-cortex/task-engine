@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
@@ -52,10 +53,12 @@ fun TaskListScreen(
     onTaskClick: (String) -> Unit,
     onChatClick: () -> Unit,
     onLogout: () -> Unit,
+    onChangeSite: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: TaskListViewModel = viewModel(factory = TaskListViewModel.Factory)
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val colleagues by viewModel.colleagues.collectAsState()
 
     // Calculate active item counts for badges
     val (assignedCount, availableCount, pendingTradesCount) = when (val state = uiState) {
@@ -141,14 +144,27 @@ fun TaskListScreen(
                             }
                         }
 
-                        IconButton(
-                            onClick = onLogout,
-                            colors = IconButtonDefaults.iconButtonColors(contentColor = GTasksTheme.colors.textSecondary)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.ExitToApp,
-                                contentDescription = "Logout"
-                            )
+                            IconButton(
+                                onClick = onChangeSite,
+                                colors = IconButtonDefaults.iconButtonColors(contentColor = GTasksTheme.colors.textSecondary)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Storefront,
+                                    contentDescription = "Switch Site"
+                                )
+                            }
+                            IconButton(
+                                onClick = onLogout,
+                                colors = IconButtonDefaults.iconButtonColors(contentColor = GTasksTheme.colors.textSecondary)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ExitToApp,
+                                    contentDescription = "Logout"
+                                )
+                            }
                         }
                     }
 
@@ -398,7 +414,7 @@ fun TaskListScreen(
             activeTradeTask?.let { task ->
                 TradeProposeDialog(
                     taskName = task.task?.name ?: "Task",
-                    colleagues = viewModel.colleagues,
+                    colleagues = colleagues,
                     onDismiss = { activeTradeTask = null },
                     onSelectColleague = { colleagueId ->
                         viewModel.proposeTrade(task.id, colleagueId)
@@ -783,6 +799,38 @@ private fun TradeProposeDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.heightIn(max = 240.dp)
                 ) {
+                    // Option 1: Open Pool Trade (Post to Available)
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(GTasksTheme.colors.colorPrimary.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                                .border(BorderStroke(1.dp, GTasksTheme.colors.colorPrimary.copy(alpha = 0.5f)), RoundedCornerShape(8.dp))
+                                .clickable { onSelectColleague("") }
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Post to Available Pool",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = GTasksTheme.colors.colorPrimary
+                                )
+                                Text(
+                                    text = "Open to anyone at this location",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = GTasksTheme.colors.textSecondary
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "Open Trade Sparkle",
+                                tint = GTasksTheme.colors.colorPrimary
+                            )
+                        }
+                    }
+
                     items(colleagues) { colleague ->
                         Row(
                             modifier = Modifier

@@ -18,6 +18,19 @@
 TRUNCATE TABLE locations CASCADE;
 TRUNCATE TABLE sites CASCADE;
 TRUNCATE TABLE organizations CASCADE;
+TRUNCATE TABLE languages CASCADE;
+
+INSERT INTO languages (id, code, name, language_code, language_name, country_code, country_name, tts_supported, created_at, updated_at) VALUES
+	('a0000000-0000-0000-0000-000000000001', 'en-US', 'English (United States)', 'en', 'English', 'US', 'United States', true, NOW(), NOW()),
+	('a0000000-0000-0000-0000-000000000002', 'es-MX', 'Spanish (Mexico)', 'es', 'Spanish', 'MX', 'Mexico', true, NOW(), NOW()),
+	('a0000000-0000-0000-0000-000000000003', 'fr-FR', 'French (France)', 'fr', 'French', 'FR', 'France', true, NOW(), NOW()),
+	('a0000000-0000-0000-0000-000000000004', 'de-DE', 'German (Germany)', 'de', 'German', 'DE', 'Germany', true, NOW(), NOW()),
+	('a0000000-0000-0000-0000-000000000005', 'zh-CN', 'Chinese (Mandarin, China)', 'zh', 'Chinese', 'CN', 'China', true, NOW(), NOW()),
+	('a0000000-0000-0000-0000-000000000006', 'en-GB', 'English (United Kingdom)', 'en', 'English', 'GB', 'United Kingdom', true, NOW(), NOW()),
+	('a0000000-0000-0000-0000-000000000007', 'es-US', 'Spanish (United States)', 'es', 'Spanish', 'US', 'United States', true, NOW(), NOW()),
+	('a0000000-0000-0000-0000-000000000008', 'ja-JP', 'Japanese (Japan)', 'ja', 'Japanese', 'JP', 'Japan', true, NOW(), NOW()),
+	('a0000000-0000-0000-0000-000000000009', 'ko-KR', 'Korean (South Korea)', 'ko', 'Korean', 'KR', 'South Korea', true, NOW(), NOW()),
+	('a0000000-0000-0000-0000-00000000000a', 'pt-BR', 'Portuguese (Brazil)', 'pt', 'Portuguese', 'BR', 'Brazil', true, NOW(), NOW());
 
 INSERT INTO organizations (id, parent_id, name, metadata, created_at, updated_at) VALUES
 	('11111111-1111-1111-1111-111111111111', NULL, 'Gemini Nexus', '{}', NOW(), NOW()),

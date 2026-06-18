@@ -10,7 +10,15 @@ data class Task(
     @SerialName("Description") val description: String? = null,
     @SerialName("TaskType") val taskType: String = "STANDARD",
     @SerialName("Priority") val priority: Int = 3,
-    @SerialName("EstimatedDurationMinutes") val estimatedDurationMinutes: Int = 0
+    @SerialName("EstimatedDurationMinutes") val estimatedDurationMinutes: Int = 0,
+    @SerialName("SOPs") val sops: List<SOP> = emptyList()
+)
+
+@Serializable
+data class SOP(
+    @SerialName("ID") val id: String,
+    @SerialName("Title") val title: String,
+    @SerialName("CanonicalURL") val canonicalUrl: String? = null
 )
 
 @Serializable
@@ -24,6 +32,9 @@ data class TaskExecution(
     @SerialName("Status") val status: String = "PENDING",
     @SerialName("Priority") val priority: Int = 3,
     @SerialName("DueAt") val dueAt: String? = null,
+    @SerialName("StartedAt") val startedAt: String? = null,
+    @SerialName("PausedAt") val pausedAt: String? = null,
+    @SerialName("TotalPausedSeconds") val totalPausedSeconds: Int = 0,
     @SerialName("CompletedAt") val completedAt: String? = null,
     @SerialName("ChecklistState") val checklistState: List<ChecklistItem> = emptyList()
 )
@@ -34,5 +45,12 @@ data class ChecklistItem(
     val action: String,
     val required: Boolean = true,
     val completed: Boolean = false,
-    @SerialName("completed_at") val completedAt: String? = null
+    val status: String = "PENDING",
+    @SerialName("started_at") val startedAt: String? = null,
+    @SerialName("paused_at") val pausedAt: String? = null,
+    @SerialName("total_paused_seconds") val totalPausedSeconds: Int = 0,
+    @SerialName("completed_at") val completedAt: String? = null,
+    @SerialName("completed_by_id") val completedById: String? = null,
+    @SerialName("slo_seconds") val sloSeconds: Int = 60,
+    @SerialName("slo_delta_seconds") val sloDeltaSeconds: Int? = null
 )

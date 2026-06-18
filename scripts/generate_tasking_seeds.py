@@ -70,7 +70,18 @@ def make_completed_checklist(steps: List[Dict[str, Any]], completed_timestamps: 
     res = []
     for idx, step in enumerate(steps):
         completed_at = completed_timestamps[idx] if idx < len(completed_timestamps) else "2026-06-02T08:22:14Z"
-        res.append({**step, "completed": True, "completed_at": completed_at})
+        started_at = "2026-06-02T08:00:00Z" if idx == 0 else completed_timestamps[idx-1]
+        res.append({
+            **step,
+            "completed": True,
+            "status": "COMPLETED",
+            "started_at": started_at,
+            "completed_at": completed_at,
+            "total_paused_seconds": 0,
+            "completed_by_id": "b75c1a02-c884-40ed-a3f8-8b95f3ff7539",
+            "slo_seconds": 180,
+            "slo_delta_seconds": -60
+        })
     return json.dumps(res).replace("'", "''")
 
 def make_inprogress_checklist(steps: List[Dict[str, Any]], completed_count: int, completed_timestamps: List[str]) -> str:
@@ -78,13 +89,45 @@ def make_inprogress_checklist(steps: List[Dict[str, Any]], completed_count: int,
     for idx, step in enumerate(steps):
         if idx < completed_count:
             completed_at = completed_timestamps[idx] if idx < len(completed_timestamps) else "2026-06-02T10:00:00Z"
-            res.append({**step, "completed": True, "completed_at": completed_at})
+            started_at = "2026-06-02T09:50:00Z" if idx == 0 else completed_timestamps[idx-1]
+            res.append({
+                **step,
+                "completed": True,
+                "status": "COMPLETED",
+                "started_at": started_at,
+                "completed_at": completed_at,
+                "total_paused_seconds": 0,
+                "completed_by_id": "b75c1a02-c884-40ed-a3f8-8b95f3ff7539",
+                "slo_seconds": 180,
+                "slo_delta_seconds": -60
+            })
+        elif idx == completed_count:
+            res.append({
+                **step,
+                "completed": False,
+                "status": "IN_PROGRESS",
+                "started_at": "2026-06-02T10:05:00Z",
+                "total_paused_seconds": 0,
+                "slo_seconds": 180
+            })
         else:
-            res.append({**step, "completed": False})
+            res.append({
+                **step,
+                "completed": False,
+                "status": "PENDING",
+                "slo_seconds": 180
+            })
     return json.dumps(res).replace("'", "''")
 
 def make_pending_checklist(steps: List[Dict[str, Any]]) -> str:
-    res = [{**step, "completed": False} for step in steps]
+    res = []
+    for step in steps:
+        res.append({
+            **step,
+            "completed": False,
+            "status": "PENDING",
+            "slo_seconds": 180
+        })
     return json.dumps(res).replace("'", "''")
 
 
@@ -158,7 +201,7 @@ def main() -> None:
     print(f"Loaded {len(test_stores)} stores from terraform.tfvars.json")
     
     # 2. Parse seeded users and locations
-    user_emails, user_names, user_sites = parse_app_users(USERS_SEED_PATH)
+    user_emails, user_names, user_sites = parse_app_users(WORKSPACE_ROOT + "/scripts/terraform/app_users_seed.sql")
     print(f"Parsed {len(user_emails)} associate/cashier users from app_users_seed.sql")
     
     # Map store IDs to their corresponding associate user details (list support)
@@ -282,11 +325,12 @@ def main() -> None:
                     f"INSERT INTO task_executions (id, task_template_id, parent_execution_id, execution_type, "
                     f"subject_execution_id, initiator_id, assignee_id, event_instance_id, description, status, priority, "
                     f"due_at, prerequisite_execution_id, decision, completed_at, checklist_state, override_flags, locked_at, "
-                    f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version) "
+                    f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version, started_at, paused_at, total_paused_seconds) "
                     f"VALUES ('{t1_exec_id}', '{TEMPLATE_REGISTER_OPEN}', NULL, 'STANDARD', NULL, '{SYSTEM_ADMIN_USER_ID}', "
                     f"'{user_id}', '{active_instance_id}', 'Opening shift register setup and till cash drop checks.', "
                     f"'COMPLETED', 1, '2026-06-02 09:00:00-05:00', NULL, NULL, '2026-06-02 08:22:14-05:00', "
-                    f"'{checklist_completed}', '{{}}', NULL, NULL, 0, 3, NULL, NOW(), NOW(), 1) "
+                    f"'{checklist_completed}', '{{}}', NULL, NULL, 0, 3, NULL, NOW(), NOW(), 1, "
+                    f"'2026-06-02 08:00:00-05:00', NULL, 0) "
                     f"ON CONFLICT DO NOTHING;"
                 )
                 executions_count += 1
@@ -299,12 +343,13 @@ def main() -> None:
                         f"INSERT INTO task_executions (id, task_template_id, parent_execution_id, execution_type, "
                         f"subject_execution_id, initiator_id, assignee_id, event_instance_id, description, status, priority, "
                         f"due_at, prerequisite_execution_id, decision, completed_at, checklist_state, override_flags, locked_at, "
-                        f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version) "
+                        f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version, started_at, paused_at, total_paused_seconds) "
                         f"VALUES ('{t2_exec_id}', '{TEMPLATE_SHOWROOM_REFRESH}', NULL, 'STANDARD', NULL, '{SYSTEM_ADMIN_USER_ID}', "
                         f"'{user_id}', '{active_instance_id}', 'Calibrate interactive demo products and refresh showcase displays.', "
                         f"'IN_PROGRESS', 2, '2026-06-02 12:00:00-05:00', NULL, NULL, NULL, "
                         f"'{checklist_state}', '{{}}', "
-                        f"'2026-06-02 11:00:00-05:00', '{clean_user_name}', 0, 3, NULL, NOW(), NOW(), 1) "
+                        f"'2026-06-02 11:00:00-05:00', '{clean_user_name}', 0, 3, NULL, NOW(), NOW(), 1, "
+                        f"'2026-06-02 11:00:00-05:00', NULL, 0) "
                         f"ON CONFLICT DO NOTHING;"
                     )
                 else:
@@ -313,12 +358,13 @@ def main() -> None:
                         f"INSERT INTO task_executions (id, task_template_id, parent_execution_id, execution_type, "
                         f"subject_execution_id, initiator_id, assignee_id, event_instance_id, description, status, priority, "
                         f"due_at, prerequisite_execution_id, decision, completed_at, checklist_state, override_flags, locked_at, "
-                        f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version) "
+                        f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version, started_at, paused_at, total_paused_seconds) "
                         f"VALUES ('{t2_exec_id}', '{TEMPLATE_PRODUCE_FRESHNESS}', NULL, 'STANDARD', NULL, '{SYSTEM_ADMIN_USER_ID}', "
                         f"'{user_id}', '{active_instance_id}', 'Verify chiller metrics and cull spoiled greens/wilted produce.', "
                         f"'IN_PROGRESS', 3, '2026-06-02 13:00:00-05:00', NULL, NULL, NULL, "
                         f"'{checklist_state}', '{{}}', "
-                        f"'2026-06-02 10:30:00-05:00', '{clean_user_name}', 0, 3, NULL, NOW(), NOW(), 1) "
+                        f"'2026-06-02 10:30:00-05:00', '{clean_user_name}', 0, 3, NULL, NOW(), NOW(), 1, "
+                        f"'2026-06-02 10:30:00-05:00', NULL, 0) "
                         f"ON CONFLICT DO NOTHING;"
                     )
                 executions_count += 1
@@ -332,11 +378,12 @@ def main() -> None:
                     f"INSERT INTO task_executions (id, task_template_id, parent_execution_id, execution_type, "
                     f"subject_execution_id, initiator_id, assignee_id, event_instance_id, description, status, priority, "
                     f"due_at, prerequisite_execution_id, decision, completed_at, checklist_state, override_flags, locked_at, "
-                    f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version) "
+                    f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version, started_at, paused_at, total_paused_seconds) "
                     f"VALUES ('{t1_exec_id}', '{TEMPLATE_SHELF_REPLENISH}', NULL, 'STANDARD', NULL, '{SYSTEM_ADMIN_USER_ID}', "
                     f"'{user_id}', '{active_instance_id}', 'Stock out correction run for core inventory aisle shelves.', "
                     f"'IN_PROGRESS', 2, '2026-06-02 15:30:00-05:00', NULL, NULL, NULL, '{checklist_state}', '{{}}', "
-                    f"'2026-06-02 14:00:00-05:00', '{clean_user_name}', 0, 3, NULL, NOW(), NOW(), 1) "
+                    f"'2026-06-02 14:00:00-05:00', '{clean_user_name}', 0, 3, NULL, NOW(), NOW(), 1, "
+                    f"'2026-06-02 14:00:00-05:00', NULL, 0) "
                     f"ON CONFLICT DO NOTHING;"
                 )
                 executions_count += 1
@@ -349,10 +396,11 @@ def main() -> None:
                         f"INSERT INTO task_executions (id, task_template_id, parent_execution_id, execution_type, "
                         f"subject_execution_id, initiator_id, assignee_id, event_instance_id, description, status, priority, "
                         f"due_at, prerequisite_execution_id, decision, completed_at, checklist_state, override_flags, locked_at, "
-                        f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version) "
+                        f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version, started_at, paused_at, total_paused_seconds) "
                         f"VALUES ('{t2_exec_id}', '{TEMPLATE_SHOWROOM_REFRESH}', NULL, 'STANDARD', NULL, '{SYSTEM_ADMIN_USER_ID}', "
                         f"'{user_id}', '{active_instance_id}', 'Calibrate interactive demo products and refresh showcase displays.', "
-                        f"'PENDING', 2, '2026-06-02 16:00:00-05:00', NULL, NULL, NULL, '{checklist_state}', '{{}}', NULL, NULL, 0, 3, NULL, NOW(), NOW(), 1) "
+                        f"'PENDING', 2, '2026-06-02 16:00:00-05:00', NULL, NULL, NULL, '{checklist_state}', '{{}}', NULL, NULL, 0, 3, NULL, NOW(), NOW(), 1, "
+                        f"NULL, NULL, 0) "
                         f"ON CONFLICT DO NOTHING;"
                     )
                 else:
@@ -361,10 +409,11 @@ def main() -> None:
                         f"INSERT INTO task_executions (id, task_template_id, parent_execution_id, execution_type, "
                         f"subject_execution_id, initiator_id, assignee_id, event_instance_id, description, status, priority, "
                         f"due_at, prerequisite_execution_id, decision, completed_at, checklist_state, override_flags, locked_at, "
-                        f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version) "
+                        f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version, started_at, paused_at, total_paused_seconds) "
                         f"VALUES ('{t2_exec_id}', '{TEMPLATE_PRODUCE_FRESHNESS}', NULL, 'STANDARD', NULL, '{SYSTEM_ADMIN_USER_ID}', "
                         f"'{user_id}', '{active_instance_id}', 'Verify chiller metrics and cull spoiled greens/wilted produce.', "
-                        f"'PENDING', 3, '2026-06-02 16:00:00-05:00', NULL, NULL, NULL, '{checklist_state}', '{{}}', NULL, NULL, 0, 3, NULL, NOW(), NOW(), 1) "
+                        f"'PENDING', 3, '2026-06-02 16:00:00-05:00', NULL, NULL, NULL, '{checklist_state}', '{{}}', NULL, NULL, 0, 3, NULL, NOW(), NOW(), 1, "
+                        f"NULL, NULL, 0) "
                         f"ON CONFLICT DO NOTHING;"
                     )
                 executions_count += 1
@@ -431,10 +480,11 @@ def main() -> None:
         f"INSERT INTO task_executions (id, task_template_id, parent_execution_id, execution_type, "
         f"subject_execution_id, initiator_id, assignee_id, event_instance_id, description, status, priority, "
         f"due_at, prerequisite_execution_id, decision, completed_at, checklist_state, override_flags, locked_at, "
-        f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version) "
+        f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version, started_at, paused_at, total_paused_seconds) "
         f"VALUES ('{ryan_t1_exec_id}', '{TEMPLATE_REGISTER_OPEN}', NULL, 'STANDARD', NULL, '{ryan_user_id}', "
         f"'{ryan_user_id}', '{ryan_active_instance_id}', 'Opening shift register setup and till cash drop checks.', "
-        f"'PENDING', 1, '2026-06-02 10:00:00-07:00', NULL, NULL, NULL, '{checklist_state}', '{{}}', NULL, NULL, 0, 3, NULL, NOW(), NOW(), 1) "
+        f"'PENDING', 1, '2026-06-02 10:00:00-07:00', NULL, NULL, NULL, '{checklist_state}', '{{}}', NULL, NULL, 0, 3, NULL, NOW(), NOW(), 1, "
+        f"NULL, NULL, 0) "
         f"ON CONFLICT DO NOTHING;"
     )
     executions_count += 1
@@ -446,12 +496,13 @@ def main() -> None:
         f"INSERT INTO task_executions (id, task_template_id, parent_execution_id, execution_type, "
         f"subject_execution_id, initiator_id, assignee_id, event_instance_id, description, status, priority, "
         f"due_at, prerequisite_execution_id, decision, completed_at, checklist_state, override_flags, locked_at, "
-        f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version) "
+        f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version, started_at, paused_at, total_paused_seconds) "
         f"VALUES ('{ryan_t2_exec_id}', '{TEMPLATE_SHOWROOM_REFRESH}', NULL, 'STANDARD', NULL, '{ryan_user_id}', "
         f"'{ryan_user_id}', '{ryan_active_instance_id}', 'Calibrate interactive demo products and refresh showcase displays.', "
         f"'IN_PROGRESS', 2, '2026-06-02 13:00:00-07:00', NULL, NULL, NULL, "
         f"'{checklist_state}', '{{}}', "
-        f"'2026-06-02 10:00:00-07:00', 'Ryan', 0, 3, NULL, NOW(), NOW(), 1) "
+        f"'2026-06-02 10:00:00-07:00', 'Ryan', 0, 3, NULL, NOW(), NOW(), 1, "
+        f"'2026-06-02 10:00:00-07:00', NULL, 0) "
         f"ON CONFLICT DO NOTHING;"
     )
     executions_count += 1
@@ -463,10 +514,11 @@ def main() -> None:
         f"INSERT INTO task_executions (id, task_template_id, parent_execution_id, execution_type, "
         f"subject_execution_id, initiator_id, assignee_id, event_instance_id, description, status, priority, "
         f"due_at, prerequisite_execution_id, decision, completed_at, checklist_state, override_flags, locked_at, "
-        f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version) "
+        f"locked_by, retry_count, max_retries, last_error, created_at, updated_at, version, started_at, paused_at, total_paused_seconds) "
         f"VALUES ('{ryan_t3_exec_id}', '{TEMPLATE_SHELF_REPLENISH}', NULL, 'STANDARD', NULL, '{ryan_user_id}', "
         f"'{ryan_user_id}', '{ryan_active_instance_id}', 'Stock out correction run for core inventory aisle shelves.', "
-        f"'PENDING', 2, '2026-06-02 16:30:00-07:00', NULL, NULL, NULL, '{checklist_state}', '{{}}', NULL, NULL, 0, 3, NULL, NOW(), NOW(), 1) "
+        f"'PENDING', 2, '2026-06-02 16:30:00-07:00', NULL, NULL, NULL, '{checklist_state}', '{{}}', NULL, NULL, 0, 3, NULL, NOW(), NOW(), 1, "
+        f"NULL, NULL, 0) "
         f"ON CONFLICT DO NOTHING;"
     )
     executions_count += 1

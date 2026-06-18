@@ -146,6 +146,21 @@ func (h *OperationalHandler) GetSiteTasks(c *gin.Context) {
 	c.JSON(http.StatusOK, queue)
 }
 
+func (h *OperationalHandler) GetSiteAssociates(c *gin.Context) {
+	siteID := c.Param("siteId")
+	if siteID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "siteId path parameter is required"})
+		return
+	}
+
+	users, err := h.shiftService.ListActiveOnShiftUsers(c.Request.Context(), siteID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, users)
+}
+
 func (h *OperationalHandler) GetUserSiteTasks(c *gin.Context) {
 	siteID := c.Param("siteId")
 	userID := c.Param("userId")
@@ -206,7 +221,7 @@ func (h *OperationalHandler) ProposeTrade(c *gin.Context) {
 	userID, _ := c.Get("userID")
 	var req struct {
 		TaskExecutionID    string `json:"task_execution_id" binding:"required"`
-		ProposedAssigneeID string `json:"proposed_assignee_id" binding:"required"`
+		ProposedAssigneeID string `json:"proposed_assignee_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

@@ -129,11 +129,10 @@ fun getFocalCoordinates(locationName: String, layout: StoreLayout): Offset? {
 fun StoreMapDialog(
     siteId: String,
     siteName: String,
-    taskName: String,
+    locationName: String,
     onDismiss: () -> Unit
 ) {
     val layout = getStoreLayout(siteId)
-    val locationName = resolveLocationName(taskName)
     val focalPoint = getFocalCoordinates(locationName, layout)
 
     // Setup pulsing beacon animations

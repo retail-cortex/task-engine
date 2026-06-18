@@ -159,8 +159,43 @@ const TaskQueue: React.FC<TaskQueueProps> = ({
                     </button>
                   )}
 
-                   {t.status === 'COMPLETED' ? (
-                    <span style={{ color: 'var(--priority-standard)', fontWeight: 600 }}>COMPLETED</span>
+                  {t.status === 'COMPLETED' ? (
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                      <span style={{ color: 'var(--priority-standard)', fontWeight: 600 }}>COMPLETED</span>
+                      {(() => {
+                        const start = t.started_at ? new Date(t.started_at).getTime() : 0;
+                        const end = t.completed_at ? new Date(t.completed_at).getTime() : 0;
+                        const durationSec = start && end ? Math.floor((end - start) / 1000) : 0;
+                        const pausedSec = t.total_paused_seconds || 0;
+                        const netSec = durationSec - pausedSec;
+                        const sloSec = t.Task ? t.Task.EstimatedDurationMinutes * 60 : 0;
+                        
+                        if (netSec > 0 && sloSec > 0) {
+                          const delta = netSec - sloSec;
+                          const isCompliant = delta <= 0;
+                          const absDelta = Math.abs(delta);
+                          const dm = Math.floor(absDelta / 60);
+                          const ds = absDelta % 60;
+                          const deltaStr = dm > 0 ? `${dm}m ${ds}s` : `${ds}s`;
+                          
+                          return (
+                            <span 
+                              style={{ 
+                                fontSize: '0.72rem', 
+                                fontWeight: 700, 
+                                padding: '2px 6px', 
+                                borderRadius: 4, 
+                                background: isCompliant ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                color: isCompliant ? '#10b981' : '#ef4444'
+                              }}
+                            >
+                              {isCompliant ? `-${deltaStr} SLO` : `+${deltaStr} SLO`}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
                   ) : t.status === 'TRADE_PENDING' ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <button
@@ -189,7 +224,14 @@ const TaskQueue: React.FC<TaskQueueProps> = ({
                       <span style={{ color: '#ec9f22', fontWeight: 600 }}>TRADE PENDING</span>
                     </div>
                   ) : t.status === 'IN_PROGRESS' ? (
-                    <span style={{ color: 'var(--priority-high)', fontWeight: 600 }}>IN_PROGRESS</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                      <span style={{ color: 'var(--priority-high)', fontWeight: 600 }}>IN_PROGRESS</span>
+                      {t.Assignee && (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
+                          👤 {t.Assignee.name}
+                        </span>
+                      )}
+                    </div>
                   ) : (
                     <span style={{ color: 'var(--text-muted)' }}>PENDING</span>
                   )}

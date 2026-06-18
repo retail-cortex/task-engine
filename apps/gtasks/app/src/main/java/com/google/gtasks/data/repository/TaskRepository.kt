@@ -6,6 +6,7 @@ import com.google.gtasks.data.api.UpdateStatusRequest
 import com.google.gtasks.data.model.Site
 import com.google.gtasks.data.model.TaskExecution
 import com.google.gtasks.data.model.Trade
+import com.google.gtasks.data.model.UserDTO
 import com.google.gtasks.data.api.ProposeTradeRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -93,6 +94,18 @@ class TaskRepository(
                 body = OverrideAssetRequest(assetId = assetId, justification = justification)
             )
             Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get only the active on-shift associates at this store.
+     */
+    suspend fun getSiteAssociates(siteId: String): Result<List<UserDTO>> = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val users = apiService.getSiteAssociates(orgId, siteId)
+            Result.success(users)
         } catch (e: Exception) {
             Result.failure(e)
         }
