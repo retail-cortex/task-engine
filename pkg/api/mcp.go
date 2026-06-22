@@ -625,10 +625,15 @@ func (h *MCPHandler) formatTasksA2UI(ctx context.Context, queue []*model.TaskExe
 			}
 		}
 
-		if len(buttons) > 0 {
+		if len(buttons) == 1 {
+			taskCard["children"] = append(taskCard["children"].([]interface{}), buttons[0])
+		} else if len(buttons) > 1 {
 			taskCard["children"] = append(taskCard["children"].([]interface{}), map[string]interface{}{
-				"type":     "row",
-				"children": buttons,
+				"type":         "row",
+				"children":     buttons,
+				"alignment":    "center",
+				"distribution": "center",
+				"gap":          8,
 			})
 		}
 
@@ -825,7 +830,8 @@ func (h *MCPHandler) HandleClaimTask(ctx context.Context, args ClaimTaskArgs) (*
 		return nil, err
 	}
 
-	return mcp.NewToolResponse(mcp.NewTextContent("Task successfully claimed and assigned.")), nil
+	// Dynamic auto-refresh: Directly return the updated details card to save a round-trip
+	return h.HandleGetTaskDetails(ctx, GetTaskDetailsArgs{ExecutionID: args.ExecutionID})
 }
 
 type UpdateTaskStatusArgs struct {
@@ -845,7 +851,8 @@ func (h *MCPHandler) HandleUpdateTaskStatus(ctx context.Context, args UpdateTask
 		return nil, err
 	}
 
-	return mcp.NewToolResponse(mcp.NewTextContent("Task status successfully updated.")), nil
+	// Dynamic auto-refresh: Directly return the updated details card to save a round-trip
+	return h.HandleGetTaskDetails(ctx, GetTaskDetailsArgs{ExecutionID: args.ExecutionID})
 }
 
 type ListPendingTradesArgs struct{}
@@ -1171,6 +1178,7 @@ func (h *MCPHandler) HandleGetTaskDetails(ctx context.Context, args GetTaskDetai
 		Action    string `json:"action"`
 		Required  bool   `json:"required"`
 		Completed bool   `json:"completed"`
+		Status    string `json:"status"`
 	}
 	if len(exec.ChecklistState) > 0 {
 		_ = json.Unmarshal(exec.ChecklistState, &steps)
@@ -1225,48 +1233,135 @@ func (h *MCPHandler) HandleGetTaskDetails(ctx context.Context, args GetTaskDetai
 	// Steps list
 	isAssignedToCaller := exec.AssigneeID != nil && *exec.AssigneeID == userID
 	for _, step := range steps {
-		statusEmoji := "🔲"
-		style := "secondary"
-		if step.Completed {
-			statusEmoji = "✅"
-			style = "primary"
+		statusIcon := "⏳"
+		statusText := "Pending"
+		if step.Status == "IN_PROGRESS" {
+			statusIcon = "▶️"
+			statusText = "In Progress"
+		} else if step.Status == "PAUSED" {
+			statusIcon = "⏸️"
+			statusText = "Paused"
+		} else if step.Completed || step.Status == "COMPLETED" {
+			statusIcon = "✅"
+			statusText = "Completed"
 		}
+
 		reqStr := ""
 		if step.Required {
 			reqStr = " (Required)"
 		}
-		textLabel := fmt.Sprintf("Step %d: %s%s", step.Step, step.Action, reqStr)
+		textLabel := fmt.Sprintf("Step %d: %s%s [%s]", step.Step, step.Action, reqStr, statusText)
 
-		if isAssignedToCaller && exec.Status == "IN_PROGRESS" {
-			// Construct a single-step delta payload rather than a full state replacement
-			deltaPayload := map[string]interface{}{
-				"step":      step.Step,
-				"completed": !step.Completed,
+		if isAssignedToCaller && exec.Status == "IN_PROGRESS" && !step.Completed && step.Status != "COMPLETED" {
+			var stepButtons []interface{}
+
+			if step.Status == "" || step.Status == "PENDING" {
+				startDelta := map[string]interface{}{
+					"step":   step.Step,
+					"action": "START",
+				}
+				startBytes, _ := json.Marshal(startDelta)
+				stepButtons = append(stepButtons, map[string]interface{}{
+					"type":  "button",
+					"label": "Start Step",
+					"style": "primary",
+					"action": "UPDATE_CHECKLIST",
+					"actionData": map[string]interface{}{
+						"execution_id":    exec.ID,
+						"status":          "IN_PROGRESS",
+						"checklist_state": string(startBytes),
+					},
+				})
+			} else if step.Status == "IN_PROGRESS" {
+				pauseDelta := map[string]interface{}{
+					"step":   step.Step,
+					"action": "PAUSE",
+				}
+				pauseBytes, _ := json.Marshal(pauseDelta)
+
+				completeDelta := map[string]interface{}{
+					"step":   step.Step,
+					"action": "COMPLETE",
+				}
+				completeBytes, _ := json.Marshal(completeDelta)
+
+				stepButtons = append(stepButtons, map[string]interface{}{
+					"type":  "button",
+					"label": "Pause Step",
+					"style": "secondary",
+					"action": "UPDATE_CHECKLIST",
+					"actionData": map[string]interface{}{
+						"execution_id":    exec.ID,
+						"status":          "IN_PROGRESS",
+						"checklist_state": string(pauseBytes),
+					},
+				}, map[string]interface{}{
+					"type":  "button",
+					"label": "Complete Step",
+					"style": "primary",
+					"action": "UPDATE_CHECKLIST",
+					"actionData": map[string]interface{}{
+						"execution_id":    exec.ID,
+						"status":          "IN_PROGRESS",
+						"checklist_state": string(completeBytes),
+					},
+				})
+			} else if step.Status == "PAUSED" {
+				resumeDelta := map[string]interface{}{
+					"step":   step.Step,
+					"action": "RESUME",
+				}
+				resumeBytes, _ := json.Marshal(resumeDelta)
+
+				stepButtons = append(stepButtons, map[string]interface{}{
+					"type":  "button",
+					"label": "Resume Step",
+					"style": "primary",
+					"action": "UPDATE_CHECKLIST",
+					"actionData": map[string]interface{}{
+						"execution_id":    exec.ID,
+						"status":          "IN_PROGRESS",
+						"checklist_state": string(resumeBytes),
+					},
+				})
 			}
-			deltaBytes, _ := json.Marshal(deltaPayload)
 
-			// Render as a clean row containing an independent checkbox button on the left
-			// and the static step description text on the right!
-			children = append(children, map[string]interface{}{
-				"type": "row",
-				"children": []interface{}{
-					map[string]interface{}{
-						"type":  "button",
-						"label": statusEmoji,
-						"style": style,
-						"action": "UPDATE_CHECKLIST",
-						"actionData": map[string]interface{}{
-							"execution_id":    exec.ID,
-							"status":          "IN_PROGRESS",
-							"checklist_state": string(deltaBytes),
+			stepChildren := []interface{}{
+				map[string]interface{}{
+					"type": "row",
+					"children": []interface{}{
+						map[string]interface{}{
+							"type":    "text",
+							"content": statusIcon,
+							"style":   "secondary",
+						},
+						map[string]interface{}{
+							"type":    "text",
+							"content": textLabel,
+							"style":   "primary",
 						},
 					},
-					map[string]interface{}{
-						"type":    "text",
-						"content": textLabel,
-						"style":   "primary",
-					},
 				},
+			}
+
+			if len(stepButtons) > 0 {
+				if len(stepButtons) == 1 {
+					stepChildren = append(stepChildren, stepButtons[0])
+				} else {
+					stepChildren = append(stepChildren, map[string]interface{}{
+						"type":         "row",
+						"children":     stepButtons,
+						"alignment":    "center",
+						"distribution": "center",
+						"gap":          8,
+					})
+				}
+			}
+
+			children = append(children, map[string]interface{}{
+				"type":     "column",
+				"gap":      4,
+				"children": stepChildren,
 			})
 		} else {
 			// Render as static row for unassigned / non-interactive states
@@ -1275,7 +1370,7 @@ func (h *MCPHandler) HandleGetTaskDetails(ctx context.Context, args GetTaskDetai
 				"children": []interface{}{
 					map[string]interface{}{
 						"type":    "text",
-						"content": statusEmoji,
+						"content": statusIcon,
 						"style":   "secondary",
 					},
 					map[string]interface{}{
@@ -1291,7 +1386,7 @@ func (h *MCPHandler) HandleGetTaskDetails(ctx context.Context, args GetTaskDetai
 
 	// Actions Row
 	var buttons []interface{}
-	
+
 	if exec.Status != "COMPLETED" {
 		if isAssignedToCaller {
 			// Belongs to the current user
@@ -1316,9 +1411,35 @@ func (h *MCPHandler) HandleGetTaskDetails(ctx context.Context, args GetTaskDetai
 			} else if exec.Status == "IN_PROGRESS" {
 				buttons = append(buttons, map[string]interface{}{
 					"type":  "button",
+					"label": "Pause Task",
+					"style": "secondary",
+					"action": "PAUSE_TASK",
+					"actionData": map[string]interface{}{
+						"execution_id": exec.ID,
+					},
+				}, map[string]interface{}{
+					"type":  "button",
 					"label": "Complete Task",
 					"style": "primary",
 					"action": "COMPLETE_TASK",
+					"actionData": map[string]interface{}{
+						"execution_id": exec.ID,
+					},
+				})
+			} else if exec.Status == "PAUSED" {
+				buttons = append(buttons, map[string]interface{}{
+					"type":  "button",
+					"label": "Resume Task",
+					"style": "primary",
+					"action": "RESUME_TASK",
+					"actionData": map[string]interface{}{
+						"execution_id": exec.ID,
+					},
+				}, map[string]interface{}{
+					"type":  "button",
+					"label": "Propose Trade",
+					"style": "secondary",
+					"action": "PROPOSE_TRADE",
 					"actionData": map[string]interface{}{
 						"execution_id": exec.ID,
 					},
@@ -1346,10 +1467,15 @@ func (h *MCPHandler) HandleGetTaskDetails(ctx context.Context, args GetTaskDetai
 		}
 	}
 
-	if len(buttons) > 0 {
+	if len(buttons) == 1 {
+		children = append(children, buttons[0])
+	} else if len(buttons) > 1 {
 		children = append(children, map[string]interface{}{
-			"type":     "row",
-			"children": buttons,
+			"type":         "row",
+			"children":     buttons,
+			"alignment":    "center",
+			"distribution": "center",
+			"gap":          8,
 		})
 	}
 

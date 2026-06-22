@@ -66,16 +66,20 @@ type CardProps struct {
 }
 
 type ColumnProps struct {
-	Alignment    string        `json:"alignment,omitempty"`
-	Distribution string        `json:"distribution,omitempty"`
-	Gap          int           `json:"gap,omitempty"`
+	Alignment          string        `json:"alignment,omitempty"`
+	Distribution       string        `json:"distribution,omitempty"`
+	CrossAxisAlignment string        `json:"crossAxisAlignment,omitempty"`
+	MainAxisAlignment  string        `json:"mainAxisAlignment,omitempty"`
+	Gap                int           `json:"gap,omitempty"`
 	Children     ChildrenProps `json:"children"`
 }
 
 type RowProps struct {
-	Alignment    string        `json:"alignment,omitempty"`
-	Distribution string        `json:"distribution,omitempty"`
-	Gap          int           `json:"gap,omitempty"`
+	Alignment          string        `json:"alignment,omitempty"`
+	Distribution       string        `json:"distribution,omitempty"`
+	CrossAxisAlignment string        `json:"crossAxisAlignment,omitempty"`
+	MainAxisAlignment  string        `json:"mainAxisAlignment,omitempty"`
+	Gap                int           `json:"gap,omitempty"`
 	Children     ChildrenProps `json:"children"`
 }
 
@@ -430,14 +434,26 @@ func NormalizeCardToA2UITransaction(legacyCard map[string]interface{}, surfaceID
 
 		case "column":
 			compID := nextID("column")
-			align := getString(node, "align")
+			align := getString(node, "alignment")
+			if align == "" {
+				align = getString(node, "align")
+			}
 			if align == "" {
 				align = "stretch"
 			}
+			dist := getString(node, "distribution")
+			if dist == "" {
+				dist = getString(node, "dist")
+			}
+			if dist == "" {
+				dist = "start"
+			}
 			properties := ColumnProps{
-				Alignment:    align,
-				Distribution: "start",
-				Gap:          getInt(node, "gap"),
+				Alignment:          align,
+				Distribution:       dist,
+				CrossAxisAlignment: mapAlignment(align),
+				MainAxisAlignment:  mapAlignment(dist),
+				Gap:                getInt(node, "gap"),
 			}
 			properties.Children = ChildrenProps{
 				ExplicitList: processChildren(getSlice(node, "children")),
@@ -452,14 +468,26 @@ func NormalizeCardToA2UITransaction(legacyCard map[string]interface{}, surfaceID
 
 		case "row":
 			compID := nextID("row")
-			align := getString(node, "align")
+			align := getString(node, "alignment")
+			if align == "" {
+				align = getString(node, "align")
+			}
 			if align == "" {
 				align = "stretch"
 			}
+			dist := getString(node, "distribution")
+			if dist == "" {
+				dist = getString(node, "dist")
+			}
+			if dist == "" {
+				dist = "start"
+			}
 			properties := RowProps{
-				Alignment:    align,
-				Distribution: "start",
-				Gap:          getInt(node, "gap"),
+				Alignment:          align,
+				Distribution:       dist,
+				CrossAxisAlignment: mapAlignment(align),
+				MainAxisAlignment:  mapAlignment(dist),
+				Gap:                getInt(node, "gap"),
 			}
 			properties.Children = ChildrenProps{
 				ExplicitList: processChildren(getSlice(node, "children")),
@@ -751,5 +779,27 @@ func normalizeUsageHint(hint string) string {
 		return "caption"
 	default:
 		return "body"
+	}
+}
+
+func mapAlignment(val string) string {
+	val = strings.ToLower(val)
+	switch val {
+	case "start":
+		return "Start"
+	case "center", "middle":
+		return "Center"
+	case "end":
+		return "End"
+	case "stretch":
+		return "Stretch"
+	case "spacebetween", "space-between":
+		return "SpaceBetween"
+	case "spacearound", "space-around":
+		return "SpaceAround"
+	case "spaceevenly", "space-evenly":
+		return "SpaceEvenly"
+	default:
+		return "Start"
 	}
 }

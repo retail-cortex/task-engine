@@ -210,6 +210,20 @@ def normalize_usage_hint(hint: str) -> str:
         return "caption"
     return "body"
 
+def map_alignment(val: str) -> str:
+    val = str(val).lower()
+    if val in ["start", "center", "middle", "end", "stretch"]:
+        if val == "middle":
+            return "Center"
+        return val.capitalize()
+    if val in ["spacebetween", "space-between"]:
+        return "SpaceBetween"
+    if val in ["spacearound", "space-around"]:
+        return "SpaceAround"
+    if val in ["spaceevenly", "space-evenly"]:
+        return "SpaceEvenly"
+    return "Start"
+
 def process_and_inline_blueprints(card_data: Any):
     """Recursively scans and replaces any blueprint canvas Image URLs with self-contained Base64 Data URIs."""
     if isinstance(card_data, list):
@@ -406,10 +420,19 @@ def normalize_card_to_a2ui_messages(flat_card: Dict[str, Any], surface_id: str =
 
         elif node_type == "column":
             comp_id = next_id("column")
+            align = node.get("alignment", node.get("align", "stretch"))
+            dist = node.get("distribution", node.get("dist", "start"))
+            
             properties = {
-                "alignment": node.get("alignment", "stretch"),
-                "distribution": node.get("distribution", "start")
+                "alignment": align,
+                "distribution": dist,
+                "crossAxisAlignment": map_alignment(align),
+                "mainAxisAlignment": map_alignment(dist)
             }
+            gap = node.get("gap")
+            if gap is not None:
+                properties["gap"] = int(gap)
+                
             properties["children"] = {
                 "explicitList": process_children(node.get("children", []))
             }
@@ -423,10 +446,19 @@ def normalize_card_to_a2ui_messages(flat_card: Dict[str, Any], surface_id: str =
 
         elif node_type == "row":
             comp_id = next_id("row")
+            align = node.get("alignment", node.get("align", "stretch"))
+            dist = node.get("distribution", node.get("dist", "start"))
+            
             properties = {
-                "alignment": node.get("alignment", "stretch"),
-                "distribution": node.get("distribution", "start")
+                "alignment": align,
+                "distribution": dist,
+                "crossAxisAlignment": map_alignment(align),
+                "mainAxisAlignment": map_alignment(dist)
             }
+            gap = node.get("gap")
+            if gap is not None:
+                properties["gap"] = int(gap)
+                
             properties["children"] = {
                 "explicitList": process_children(node.get("children", []))
             }

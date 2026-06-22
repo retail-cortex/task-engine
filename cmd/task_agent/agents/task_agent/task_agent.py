@@ -153,9 +153,9 @@ class StatelessMcpTool(BaseTool):
                 print(f"[A2UI Cache] Intercepted get_site_locations a2ui card and cached it in builtins.CACHED_A2UI_CARDS. Length: {len(content_text)}")
                 return "[A2UI_CARD_LOCATIONS_CACHED]"
                 
-            if self.name == "get_task_details":
+            if self.name in ["get_task_details", "update_task_status", "claim_task"]:
                 builtins.CACHED_A2UI_CARDS["[A2UI_CARD_TASK_DETAILS_CACHED]"] = content_text
-                print(f"[A2UI Cache] Intercepted get_task_details a2ui card and cached it in builtins.CACHED_A2UI_CARDS. Length: {len(content_text)}")
+                print(f"[A2UI Cache] Intercepted {self.name} a2ui card and cached it in builtins.CACHED_A2UI_CARDS. Length: {len(content_text)}")
                 return "[A2UI_CARD_TASK_DETAILS_CACHED]"
 
             if self.name == "get_weather":
@@ -279,11 +279,13 @@ OPERATIONAL PROTOCOL:
    - "SET_STORE": immediately call 'get_tasks' tool with 'site_id' (resolved from siteID) and 'format': 'a2ui' to display the active task list for the newly selected store. This will return the token '[A2UI_CARD_TASK_LIST_CACHED]'. You MUST output this token exactly as-is.
    - "CLAIM_TASK": call 'claim_task' tool with the provided 'execution_id'.
    - "START_TASK": call 'update_task_status' tool with 'execution_id' and status="IN_PROGRESS".
+   - "PAUSE_TASK": call 'update_task_status' tool with 'execution_id' and status="PAUSED".
+   - "RESUME_TASK": call 'update_task_status' tool with 'execution_id' and status="IN_PROGRESS".
    - "COMPLETE_TASK": call 'update_task_status' tool with 'execution_id' and status="COMPLETED".
    - "UPDATE_CHECKLIST": call 'update_task_status' tool with 'execution_id', status="IN_PROGRESS", and the provided 'checklist_state'.
    - "PROPOSE_TRADE": call 'propose_trade' tool with 'task_execution_id' (resolved from execution_id).
 
-5. Auto-Refresh Details: Upon successfully executing a 'CLAIM_TASK', 'START_TASK', or 'UPDATE_CHECKLIST' action, you MUST immediately invoke the 'get_task_details' tool for that specific 'execution_id' and return its updated A2UI details card in your response. This guarantees that the user and your own context are always looking at the freshest, most up-to-date task details and checklist state.
+5. Auto-Refresh Details: The tools 'claim_task' and 'update_task_status' will directly return the updated A2UI details card in their tool responses (returning the token '[A2UI_CARD_TASK_DETAILS_CACHED]'). You do NOT need to make a separate 'get_task_details' call if you have just successfully executed one of these tools; simply return the updated card token returned by the tool directly to the user. This optimizes token usage, decreases latency, and prevents API rate limiting.
 
 A2UI CARD OUTPUT PROTOCOL:
 You MUST format structured UI cards for retail-focused responses by outputting a single cached token exactly as-is in your response. Do not attempt to write or synthesize any JSON yourself.

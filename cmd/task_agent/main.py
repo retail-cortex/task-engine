@@ -156,6 +156,67 @@ except Exception as e:
 # Thread-local user ID context propagator middleware
 from shared_context import active_user_id_var
 from fastapi import Request
+from typing import Dict, Any, List
+
+def synthesize_a2ui_error_card(exc: Exception) -> List[Dict[str, Any]]:
+    exc_type = type(exc).__name__
+    exc_msg = str(exc)
+    
+    friendly_title = "Application Error"
+    friendly_msg = "An unexpected error occurred while processing your request. Please try again."
+    
+    # Customize message based on known error signatures
+    if "429" in exc_msg or "RESOURCE_EXHAUSTED" in exc_msg:
+        friendly_title = "Rate Limit Exceeded (429)"
+        friendly_msg = "The task engine is experiencing heavy traffic and has temporarily rate-limited your request. Please wait a moment and click retry."
+    elif "connection" in exc_msg.lower() or "dial tcp" in exc_msg.lower() or "reset by peer" in exc_msg.lower():
+        friendly_title = "Database Connection Failed"
+        friendly_msg = "The task engine was unable to establish a secure database connection. The database may be restarting or undergoing maintenance."
+    elif "unauthorized" in exc_msg.lower() or "401" in exc_msg or "token" in exc_msg.lower():
+        friendly_title = "Authentication Required (401)"
+        friendly_msg = "Your user session has expired or is invalid. Please sign out and sign back in to refresh your credentials."
+        
+    error_card = {
+        "type": "card",
+        "title": f"⚠️ {friendly_title}",
+        "style": "standard",
+        "children": [
+            {
+                "type": "text",
+                "content": friendly_msg,
+                "style": "primary"
+            },
+            {
+                "type": "divider"
+            },
+            {
+                "type": "text",
+                "content": f"Technical Details ({exc_type}):",
+                "style": "secondary"
+            },
+            {
+                "type": "text",
+                "content": exc_msg,
+                "style": "secondary"
+            }
+        ]
+    }
+    
+    from a2ui_transpiler import normalize_card_to_a2ui_messages
+    parts_data = normalize_card_to_a2ui_messages(error_card)
+    
+    a2a_parts = []
+    for part in parts_data:
+        a2a_parts.append({
+            "data": {
+                "data": part,
+                "metadata": {
+                    "mimeType": "application/json+a2ui"
+                }
+            }
+        })
+        
+    return a2a_parts
 
 @app.middleware("http")
 async def extract_user_id_middleware(request: Request, call_next):
@@ -259,6 +320,42 @@ async def extract_user_id_middleware(request: Request, call_next):
     try:
         response = await call_next(request)
         return response
+    except Exception as exc:
+        if request.url.path == "/a2a/task_agent" and request.method == "POST":
+            import sys
+            import traceback
+            print(f"[A2A Exception Handler] Caught unhandled exception: {exc}", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+            
+            try:
+                a2a_parts = synthesize_a2ui_error_card(exc)
+                request_id = 1
+                try:
+                    body_bytes = await request.body()
+                    if body_bytes:
+                        body_json = json.loads(body_bytes)
+                        request_id = body_json.get("id", 1)
+                except Exception:
+                    pass
+                    
+                from fastapi.responses import JSONResponse
+                return JSONResponse(
+                    status_code=200,
+                    content={
+                        "jsonrpc": "2.0",
+                        "result": {
+                            "message": {
+                                "role": "agent",
+                                "parts": a2a_parts
+                            }
+                        },
+                        "id": request_id
+                    }
+                )
+            except Exception as handler_err:
+                print(f"[A2A Exception Handler] Fatal: Failed to synthesize error card: {handler_err}", file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
+        raise exc
     finally:
         active_user_id_var.reset(token)
 
