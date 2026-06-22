@@ -114,3 +114,76 @@ A2UI v0.8 does not support dynamic client-side custom SVGs, inline canvas code, 
 2. **Request Parameters**: Accepts `layout` (e.g., `linear`, `boutique`, or `racetrack`) and coordinate parameters (`x`, `y`).
 3. **SVG Generation**: The endpoint constructs the corresponding vector floor plan, overlays a pulsating beacon circle at the coordinate, and returns the response with MIME type `image/svg+xml`.
 4. **Rendering**: The A2UI transpiler maps any `"canvas"` element in the model output to an `Image` component referencing this dynamic API URL, letting the client render the generated SVG floor plan natively.
+
+---
+
+## 7. Typographic Schema Normalization
+
+A2UI v0.8 stable strictly enforces a small set of typographic values for the `usageHint` (and `style`) properties of text components.
+
+> [!IMPORTANT]
+> The only valid A2UI v0.8 typographic values are: `"h1"`, `"h2"`, `"h3"`, `"body"`, and `"caption"`.
+
+Custom or legacy layout strings such as `"primary"` or `"secondary"` will fail v0.8 schema validation. When this happens, Google Chat's card validator silently rejects the component, dropping all affected labels and descriptions from the rendering.
+To prevent this, the Go and Python A2UI generators must pass all text styles through a normalization function:
+- `"primary"` $\rightarrow$ `"body"`
+- `"secondary"` $\rightarrow$ `"caption"`
+- Any other invalid style $\rightarrow$ `"body"`
+
+---
+
+## 8. Hermetic Base64 Vector Inlining (Mixed Content Resolution)
+
+In secure Gemini Enterprise environments (hosted over HTTPS), referencing image endpoints over local HTTP (e.g. `http://localhost:8081/api/v1/blueprint`) triggers browser **Mixed Content blocking**, resulting in broken floor plans.
+
+To resolve this, the transpiler intercepts canvas nodes and dynamic floor plan Image elements, generates the SVG vectors dynamically on the server side, base64-encodes them, and returns a self-contained **Base64 Data URI** directly in the card payload:
+```
+"url": {
+  "literalString": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0..."
+}
+```
+This enables the client to render the floor plan instantly and hermetically without initiating any external network requests, bypassing browser Mixed Content blocks entirely.
+
+---
+
+## 9. Flutter-Style Alignment & Spacing
+
+To align and distribute children inside Column and Row containers, A2UI v0.8 supports both standard and Flutter-style properties. Populating both sets concurrently guarantees perfect layout rendering regardless of the client-side A2UI parser version:
+*   **Cross-Axis Alignment (`crossAxisAlignment`)**: Controls alignment perpendicular to the container's main axis (maps from `alignment`: `start` $\rightarrow$ `"Start"`, `center`/`middle` $\rightarrow$ `"Center"`, `stretch` $\rightarrow$ `"Stretch"`, `end` $\rightarrow$ `"End"`).
+*   **Main-Axis Alignment (`mainAxisAlignment`)**: Controls children spacing and distribution along the container's main axis (maps from `distribution`: `start` $\rightarrow$ `"Start"`, `center` $\rightarrow$ `"Center"`, `space-between`/`spaceBetween` $\rightarrow$ `"SpaceBetween"`, `space-around` $\rightarrow$ `"SpaceAround"`, `space-evenly` $\rightarrow$ `"SpaceEvenly"`).
+
+---
+
+## 10. Sizing Constraints & Button Stretching
+
+A2UI v0.8 buttons do not possess explicit width or styling properties (like `width` or `fullWidth`). Sizing is controlled entirely by parent layout containers.
+
+### The Column Stretching Hack
+To force a button to expand to the full width of the card or cell (e.g. full cell width):
+1. Place the button inside a `Column` container.
+2. Set the Column's cross-axis alignment to `"stretch"` (`"crossAxisAlignment": "Stretch"`).
+3. If the button is wrapped inside a `Row`, it will only occupy its content width. For single-button states (such as `"View Details"`, `"Start Step"`, or `"Complete Task"`), **omit the Row wrapper** and append the button directly as a child of the parent Column to trigger full-width stretching.
+
+---
+
+## 11. Direct-Return Tool Output (429 Rate-Limit Mitigation)
+
+In A2UI card execution flows, a single user click (such as starting a step) can trigger multiple sequential LLM calls in rapid succession (e.g. Initial turn $\rightarrow$ `update_task_status` tool call $\rightarrow$ `get_task_details` tool call $\rightarrow$ final token response). In low-quota projects, this high requests-per-minute (RPM) rate triggers `429 RESOURCE_EXHAUSTED` rate-limit errors.
+
+To mitigate this, implement a **direct-return card update** pattern:
+1. **Tool Refactoring**: Optimize backend tool handlers (e.g. `claim_task`, `update_task_status`) to directly invoke and return the updated A2UI details card (`[A2UI_CARD_TASK_DETAILS_CACHED]`) in their tool response, rather than returning a generic success text string.
+2. **LLM Prompt Instruction**: Instruct the model that these tools return the updated details card directly, and that it **must not** make a separate, sequential `get_task_details` call.
+This cuts the LLM round-trip count per click from 3 down to 2, reduces card refresh latency by ~33%, and completely eliminates 429 quota exhaustion risks.
+
+---
+
+## 12. Resilient A2UI Error Card Fallbacks
+
+Unhandled server exceptions (e.g. database timeouts, OIDC validation failures, or rate-limit drops) normally bubble up as a `500 Internal Server Error`, causing the Gemini Enterprise client to freeze or display a generic error.
+
+To deliver a premium, resilient experience, wrap the A2A HTTP gateway execution in a global try-except middleware:
+1. Intercept all request processing exceptions.
+2. Extract the request's JSON-RPC `id` to preserve protocol compliance.
+3. Synthesize a friendly A2UI Error Card displaying custom instructions based on the error type (429 Rate Limits, Database Connection resets, 401 Session Expirations) along with a collapsible typographic `caption` containing the full technical stack trace for debugging.
+4. Return a `200 OK` response containing the error card parts, ensuring the client renders a graceful, themed error state.
+
