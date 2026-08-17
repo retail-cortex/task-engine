@@ -25,13 +25,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Cache Bazel
-        uses: actions/cache@v4
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@v0.8.5
         with:
-          path: ~/.bazel-cache
-          key: bazel-cache-${{ runner.os }}-${{ hashFiles('**/BUILD.bazel', '**/MODULE.bazel', '**/MODULE.bazel.lock') }}
-          restore-keys: |
-            bazel-cache-${{ runner.os }}-
+          bazelisk-cache: true
+          disk-cache: ~/.bazel-cache/disk
+          repository-cache: ~/.bazel-cache/repo
 
       - name: Build Docs Site
         run: |

@@ -1,0 +1,29 @@
+name: CI / Build & Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  bazel-test:
+    name: Bazel Hermetic Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@v0.8.5
+        with:
+          bazelisk-cache: true
+          disk-cache: ~/.bazel-cache/disk
+          repository-cache: ~/.bazel-cache/repo
+
+      - name: Build All Targets
+        run: bazel build //...
+
+      - name: Execute All Tests
+        run: bazel test //...
