@@ -53,5 +53,5 @@ app/build/
 *.log
 tf.log
 
-.env.*.toml
-.envrc *.out
+.envrc
+*.out
