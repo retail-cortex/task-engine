@@ -15,15 +15,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Bazel
-        uses: bazel-contrib/setup-bazel@v0
+      - name: Cache Bazel
+        uses: actions/cache@v4
         with:
-          bazelisk-cache: true
-          disk-cache: ~/.bazel-cache/disk
-          repository-cache: ~/.bazel-cache/repo
+          path: ~/.bazel-cache
+          key: bazel-cache-${{ runner.os }}-${{ hashFiles('**/BUILD.bazel', '**/MODULE.bazel', '**/MODULE.bazel.lock') }}
+          restore-keys: |
+            bazel-cache-${{ runner.os }}-
 
       - name: Build All Targets
-        run: bazel build //...
+        run: bazel build --disk_cache=~/.bazel-cache/disk --repository_cache=~/.bazel-cache/repo //...
 
       - name: Execute All Tests
-        run: bazel test //...
+        run: bazel test --disk_cache=~/.bazel-cache/disk --repository_cache=~/.bazel-cache/repo //...
