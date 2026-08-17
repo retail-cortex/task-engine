@@ -54,4 +54,4 @@ app/build/
 tf.log
 
 .env.*.toml
-.envrc 
+.envrc *.out

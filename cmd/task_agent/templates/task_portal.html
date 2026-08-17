@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+
+<!--
+Copyright 2026 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<html lang="en">
+<head>
+  <!-- GE_SRCDOC_CSP -->
+  <meta http-equiv="Content-Security-Policy" content="connect-src 'none'">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive Task Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #020b18;             /* Extremely dark navy for maximum contrast */
+      --card-bg: #061224;             /* Solid, opaque card background for perfect readability */
+      --card-border: rgba(0, 113, 206, 0.25); /* Subtle, high-tech glowing Walmart Blue border */
+      --text-primary: #ffffff;        /* Crisp white for high-contrast titles */
+      --text-secondary: #94a3b8;      /* Light Slate grey for perfectly readable metadata */
+      
+      /* Vibrant Brand Accents */
+      --primary: #0071ce;
+      --primary-rgb: 0, 113, 206;
+      --secondary: #eb148d;
+      --secondary-rgb: 235, 20, 141;
+      --accent: #ffc220;
+      --accent-rgb: 255, 194, 32;
+      
+      --primary-gradient: linear-gradient(135deg, var(--primary), var(--secondary));
+      --primary-glow: rgba(var(--primary-rgb), 0.4);
+      --success: #22c55e;
+      --success-glow: rgba(34, 197, 94, 0.3);
+      --progress: #f97316;
+      --progress-glow: rgba(249, 115, 22, 0.3);
+      --paused: #eab308;
+      --paused-glow: rgba(234, 179, 8, 0.3);
+      --pending: #6b7280;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: radial-gradient(circle at 50% 0%, #082247 0%, var(--bg-dark) 100%); /* Deep, rich ambient glow */
+      color: var(--text-primary);
+      padding: 10px;
+      overflow: hidden; /* Lock the iframe container height completely */
+      height: 100vh;
+    }
+
+    /* Common Card Styles */
+    .panel-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(12px);
+      border-radius: 12px;
+      padding: 12px 14px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .view-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      height: 100%;
+    }
+
+    /* Titles */
+    h1, h2, h3 {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .meta-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+
+    /* Status Badges */
+    .status-badge {
+      font-family: 'Outfit', sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .status-badge.in_progress {
+      background: rgba(249, 115, 22, 0.15);
+      color: var(--progress);
+      border: 1px solid var(--progress);
+      box-shadow: 0 0 8px var(--progress-glow);
+    }
+
+    .status-badge.completed {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--success);
+      border: 1px solid var(--success);
+      box-shadow: 0 0 8px var(--success-glow);
+    }
+
+    .status-badge.paused {
+      background: rgba(234, 179, 8, 0.15);
+      color: var(--paused);
+      border: 1px solid var(--paused);
+      box-shadow: 0 0 8px var(--paused-glow);
+    }
+
+    .status-badge.pending {
+      background: rgba(107, 114, 128, 0.15);
+      color: var(--text-secondary);
+      border: 1px solid var(--pending);
+    }
+
+    /* Links & Buttons */
+    .action-link {
+      color: var(--primary);
+      font-size: 12px;
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.2s;
+    }
+
+    .action-link:hover {
+      color: var(--secondary);
+    }
+
+    /* ========================================== */
+    /* View A: Store Selector Styles              */
+    /* ========================================== */
+    .store-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+      max-height: 300px;
+      padding-right: 4px;
+    }
+
+    .store-grid::-webkit-scrollbar { width: 6px; }
+    .store-grid::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 999px; }
+    .store-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 999px; }
+
+    .store-card {
+      background: #0b1c36; /* Solid elevated navy layer */
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: justify;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .store-card:hover {
+      background: rgba(var(--primary-rgb), 0.04);
+      border-color: rgba(var(--primary-rgb), 0.15);
+    }
+
+    .store-card.active {
+      background: rgba(var(--primary-rgb), 0.1);
+      border-color: var(--primary);
+      box-shadow: 0 0 12px rgba(var(--primary-rgb), 0.15);
+    }
+
+    .store-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-grow: 1;
+    }
+
+    .store-icon-wrapper {
+      background: rgba(var(--primary-rgb), 0.15);
+      border-radius: 8px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary);
+    }
+
+    .selection-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: auto;
+    }
+
+    /* ========================================== */
+    /* View B: Task List Styles                   */
+    /* ========================================== */
+    .task-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .task-list-scrollable {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+      max-height: 300px;
+      padding-right: 4px;
+    }
+
+    .task-list-scrollable::-webkit-scrollbar { width: 6px; }
+    .task-list-scrollable::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 999px; }
+    .task-list-scrollable::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 999px; }
+
+    .task-item-card {
+      background: #0b1c36; /* Solid elevated navy layer */
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .task-item-card:hover {
+      background: rgba(var(--secondary-rgb), 0.08);
+      border-color: rgba(var(--secondary-rgb), 0.3);
+      transform: translateX(4px);
+    }
+
+    .task-item-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .task-item-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .task-item-badges {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .priority-badge {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    /* ========================================== */
+    /* View C: Task Details Styles (Existing)     */
+    /* ========================================== */
+    .header-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(12px);
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .task-title-area {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .task-title-area h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      background: var(--primary-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .task-meta {
+      font-size: 11px;
+      color: var(--text-secondary);
+      display: flex;
+      gap: 12px;
+    }
+
+    /* Progress Area */
+    .progress-container {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 2px;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .progress-bar-bg {
+      height: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 9999px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--primary-gradient);
+      box-shadow: 0 0 8px var(--primary-glow);
+      width: 0%;
+      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Main Grid Layout */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 12px;
+    }
+
+    /* Digital Twin SVG Map */
+    .map-wrapper {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .store-svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Map Stylings */
+    .svg-bg { fill: rgba(3, 23, 48, 0.6); } /* Match BgInput for nice contrast */
+    .svg-wall { fill: none; stroke: var(--primary); stroke-opacity: 0.3; stroke-width: 3; } /* Subtle brand-colored walls */
+    .svg-aisle { fill: rgba(255, 255, 255, 0.02); stroke: rgba(255, 255, 255, 0.08); stroke-width: 1; cursor: pointer; transition: all 0.3s; }
+    .svg-aisle:hover { fill: rgba(var(--primary-rgb), 0.08); stroke: rgba(var(--primary-rgb), 0.3); }
+    .svg-aisle.active { fill: rgba(var(--secondary-rgb), 0.12); stroke: var(--secondary); stroke-width: 1.5; }
+    .svg-zone-label { fill: #475569; font-family: 'Outfit', sans-serif; font-size: 10px; font-weight: 600; pointer-events: none; text-transform: uppercase; }
+    .svg-zone-label.active { fill: var(--secondary); }
+    
+    .svg-register { fill: rgba(255, 255, 255, 0.04); stroke: rgba(255, 255, 255, 0.1); stroke-width: 1; cursor: pointer; transition: all 0.3s; }
+    .svg-register:hover { fill: rgba(249, 115, 22, 0.08); stroke: rgba(249, 115, 22, 0.3); }
+    .svg-register.active { fill: rgba(249, 115, 22, 0.12); stroke: var(--progress); stroke-width: 1.5; }
+
+    /* Pulsing Beacon Circle */
+    .svg-beacon-outer {
+      fill: var(--progress-glow);
+      transform-origin: center;
+      animation: pulse 1.8s infinite ease-out;
+    }
+
+    .svg-beacon-inner {
+      fill: var(--progress);
+      stroke: #fff;
+      stroke-width: 1.5;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.6); opacity: 0.9; }
+      100% { transform: scale(2.2); opacity: 0; }
+    }
+
+    /* Checklist Steps Panel */
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow-y: auto;
+      max-height: 215px;
+      padding-right: 4px;
+    }
+
+    .step-list::-webkit-scrollbar { width: 6px; }
+    .step-list::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 999px; }
+    .step-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 999px; }
+
+    .step-card {
+      background: #0b1c36; /* Solid elevated navy layer */
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 8px 10px;
+      display: flex;
+      gap: 10px;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .step-card:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .step-card.completed {
+      border-left: 3px solid var(--success);
+      background: rgba(34, 197, 94, 0.03);
+    }
+
+    .step-card.in-progress {
+      border-left: 3px solid var(--progress);
+      background: rgba(249, 115, 22, 0.03);
+      box-shadow: 0 0 12px rgba(249, 115, 22, 0.05);
+    }
+
+    .step-card.active {
+      border-color: var(--primary);
+      background: rgba(var(--primary-rgb), 0.05);
+      box-shadow: 0 0 12px rgba(var(--primary-rgb), 0.08);
+    }
+
+    .step-card.completed.active {
+      border-left: 3px solid var(--success);
+    }
+
+    .step-card.in-progress.active {
+      border-left: 3px solid var(--progress);
+    }
+
+    .step-card.paused {
+      border-left: 3px solid var(--paused);
+      background: rgba(234, 179, 8, 0.03);
+    }
+
+    .checkbox-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      border: 1.5px solid rgba(255, 255, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.2s;
+    }
+
+    .step-card.completed .checkbox-icon {
+      background: var(--success);
+      border-color: var(--success);
+      color: #fff;
+    }
+
+    .step-card.in-progress .checkbox-icon {
+      border-color: var(--progress);
+      color: var(--progress);
+    }
+
+    .step-card.paused .checkbox-icon {
+      border-color: var(--paused);
+      color: var(--paused);
+    }
+
+    .step-details {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .step-title {
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .step-card.completed .step-title {
+      color: var(--text-secondary);
+      text-decoration: line-through;
+    }
+
+    .step-desc {
+      font-size: 10px;
+      color: var(--text-secondary);
+      line-height: 1.3;
+    }
+
+    .step-fixture {
+      font-size: 9px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    /* Back Button style */
+    .back-btn {
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--text-primary);
+      transition: all 0.2s;
+    }
+
+    .back-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-container" style="height: 100%;">
+
+    <!-- ========================================== -->
+    <!-- VIEW A: STORE SELECTOR VIEW                -->
+    <!-- ========================================== -->
+    <div id="store-selector-view" class="view-panel" style="display: none;">
+      <div class="panel-card" style="gap: 6px;">
+        <h2>Select Storefront Context</h2>
+        <div class="meta-subtitle">Establish active site context to view prioritized task queues.</div>
+      </div>
+      <div class="store-grid" id="store-list-container">
+        <!-- Dynamic Store Cards Injected Here -->
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW B: TASK LIST VIEW                     -->
+    <!-- ========================================== -->
+    <div id="task-list-view" class="view-panel" style="display: none;">
+      <div class="panel-card">
+        <div class="task-header-row">
+          <div>
+            <h2 id="active-store-name">Volt & Vine - Seattle</h2>
+            <div class="meta-subtitle" id="task-count-subtitle">Loading prioritized task executions...</div>
+          </div>
+          <a class="action-link" id="switch-store-link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            Switch Store
+          </a>
+        </div>
+      </div>
+      <div class="task-list-scrollable" id="task-items-container">
+        <!-- Dynamic Task Cards Injected Here -->
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VIEW C: TASK DETAILS VIEW                  -->
+    <!-- ========================================== -->
+    <div id="task-details-view" class="view-panel" style="display: none;">
+      <!-- Header Panel -->
+      <div class="header-card">
+        <div class="header-top">
+          <div class="task-title-area">
+            <button class="back-btn" id="back-to-tasks-btn" title="Back to Task List">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+            </button>
+            <h1 id="details-task-title">Register Terminal & Cash Opening Checkout Suite</h1>
+          </div>
+          <div id="details-task-status-pill">
+            <span class="status-badge in_progress">In Progress</span>
+          </div>
+        </div>
+        
+        <div class="task-meta">
+          <span id="details-task-assignee">Assignee: Ryan</span>
+          <span id="details-task-store">Store: Volt & Vine - Seattle</span>
+        </div>
+
+        <!-- Progress Area -->
+        <div class="progress-container">
+          <div class="progress-header">
+            <span>Checklist Progress</span>
+            <span id="progress-percent-text">33%</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progress-bar-fill" style="width: 33%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Grid Layout -->
+      <div class="main-grid">
+        <!-- Store Digital Twin SVG Map -->
+        <div class="panel-card" style="gap: 8px;">
+          <h3 id="active-location-label" style="font-size: 11px; text-transform: uppercase; color: var(--text-secondary);">Focus: Store Layout</h3>
+          <div class="map-wrapper">
+            <svg class="store-svg" viewBox="0 0 300 200" id="storefront-map">
+              <rect class="svg-bg" width="300" height="200" rx="8" />
+              
+              <!-- External and Internal Walls -->
+              <rect class="svg-wall" x="10" y="10" width="280" height="180" rx="6" />
+              
+              <!-- Store Aisles -->
+              <rect class="svg-aisle" x="25" y="25" width="50" height="40" rx="4" id="zone-produce" data-zone="produce" />
+              <rect class="svg-aisle" x="25" y="80" width="50" height="40" rx="4" id="zone-bakery" data-zone="bakery" />
+              <rect class="svg-aisle" x="25" y="135" width="50" height="40" rx="4" id="zone-dairy" data-zone="dairy" />
+              
+              <rect class="svg-aisle" x="90" y="40" width="60" height="120" rx="6" id="zone-apparel" data-zone="apparel" />
+              <rect class="svg-aisle" x="165" y="40" width="55" height="120" rx="6" id="zone-electronics" data-zone="electronics" />
+              
+              <!-- Checkout Register Lanes -->
+              <rect class="svg-register" x="235" y="25" width="40" height="15" rx="3" id="zone-register_1" data-register="1" />
+              <rect class="svg-register" x="235" y="55" width="40" height="15" rx="3" id="zone-register_2" data-register="2" />
+              <rect class="svg-register" x="235" y="85" width="40" height="15" rx="3" id="zone-register_3" data-register="3" />
+              <rect class="svg-register" x="235" y="115" width="40" height="15" rx="3" id="zone-customer_service" data-register="cs" />
+              
+              <!-- Aisle Labels -->
+              <text class="svg-zone-label" x="50" y="49" text-anchor="middle" id="label-produce">Produce</text>
+              <text class="svg-zone-label" x="50" y="104" text-anchor="middle" id="label-bakery">Bakery</text>
+              <text class="svg-zone-label" x="50" y="159" text-anchor="middle" id="label-dairy">Dairy</text>
+              <text class="svg-zone-label" x="120" y="104" text-anchor="middle" id="label-apparel">Apparel</text>
+              <text class="svg-zone-label" x="192" y="104" text-anchor="middle" id="label-electronics">Electronics</text>
+              
+              <!-- Registers Labels -->
+              <text class="svg-zone-label" x="255" y="14" text-anchor="middle" style="font-size: 8px;">Registers</text>
+              
+              <!-- Entrance Label -->
+              <text class="svg-zone-label" x="150" y="184" text-anchor="middle" style="fill: #ef4444; font-size: 8px; font-weight: 700; letter-spacing: 1px;">ENTRANCE</text>
+              
+              <!-- Pulsing Beacon Circle Group -->
+              <g id="map-beacon" style="display: none;">
+                <circle class="svg-beacon-outer" cx="0" cy="0" r="12" />
+                <circle class="svg-beacon-inner" cx="0" cy="0" r="4" />
+              </g>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Checklist Steps Panel -->
+        <div class="panel-card" style="gap: 8px;">
+          <h3>Checklist Steps (<span id="details-step-count">0</span>)</h3>
+          <div class="step-list" id="details-steps-container">
+            <!-- Dynamic Step Cards Injected Here -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Safe parse window.__TASK_STATE__
+    const state = window.__TASK_STATE__ || {
+      active_site_id: null,
+      sites: [],
+      tasks: [],
+      active_task: null,
+      user_name: "Associate",
+      selected_site_id: null
+    };
+
+    console.log("[Unified Portal] Hydrating view with state:", state);
+
+    // ==========================================
+    // Gemini Enterprise postMessage Bridge       
+    // ==========================================
+    const PARENT_ORIGIN = "*";
+
+    function sendAgentAction(actionName, params) {
+      // Build context parameters string
+      const paramStr = Object.entries(params)
+        .map(([k, v]) => `${k}="${v}"`)
+        .join(', ');
+      
+      const text = `User clicked A2UI button action: "${actionName}" with parameters: ${paramStr}`;
+      console.log("[Unified Portal] Posting agent action via GE text flattening:", text);
+
+      const userAction = {
+        name: actionName,
+        surfaceId: "task_portal",
+        sourceComponentId: "portal_iframe",
+        timestamp: new Date().toISOString(),
+        context: params
+      };
+
+      const envelopes = [
+        { type: "a2ui.userAction", userAction, text },
+        { type: "a2ui_action", action: actionName, data: params, text },
+        { role: "user", parts: [{ kind: "text", text }] },
+        { action: { name: actionName, context: params }, text },
+        { ...userAction, text }
+      ];
+
+      envelopes.forEach(msg => {
+        try {
+          window.parent.postMessage(msg, PARENT_ORIGIN);
+        } catch(e) {
+          // Harmless
+        }
+      });
+    }
+
+    // ==========================================
+    // Core Navigation & View Selector            
+    // ==========================================
+    function selectView() {
+      document.getElementById('store-selector-view').style.display = 'none';
+      document.getElementById('task-list-view').style.display = 'none';
+      document.getElementById('task-details-view').style.display = 'none';
+
+      if (!state.active_site_id) {
+        renderStoreSelector();
+        document.getElementById('store-selector-view').style.display = 'flex';
+      } else if (state.active_site_id && !state.active_task) {
+        renderTaskList();
+        document.getElementById('task-list-view').style.display = 'flex';
+      } else {
+        renderTaskDetails();
+        document.getElementById('task-details-view').style.display = 'flex';
+      }
+    }
+
+    // ==========================================
+    // VIEW A: Render Store Selector              
+    // ==========================================
+    function renderStoreSelector() {
+      const container = document.getElementById('store-list-container');
+      container.innerHTML = '';
+
+      if (!state.sites || state.sites.length === 0) {
+        container.innerHTML = `<div class="panel-card" style="text-align: center; color: var(--text-secondary);">No authorized storefront sites configured.</div>`;
+        return;
+      }
+
+      state.sites.forEach(site => {
+        const card = document.createElement('div');
+        card.className = 'store-card';
+        
+        // Dynamic checkmark highlight on load based on state
+        const isSelected = state.selected_site_id === site.id;
+        if (isSelected) {
+          card.classList.add('active');
+        }
+
+        const indicator = isSelected 
+          ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" fill="#0071ce" stroke="#0071ce"></circle><polyline points="8 12 11 15 16 10" stroke="#fff" stroke-width="2" fill="none"></polyline></svg>`
+          : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle></svg>`;
+
+        card.innerHTML = `
+          <div class="store-info">
+            <div class="store-icon-wrapper">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            </div>
+            <div>
+              <div style="font-size: 13px; font-weight: 600;">${site.name}</div>
+              <div style="font-size: 10px; color: var(--text-secondary);">ID: ${site.id.substring(0, 8)}...</div>
+            </div>
+          </div>
+          <div class="selection-indicator" style="color: var(--text-secondary); margin-left: auto; display: flex; align-items: center;">
+            ${indicator}
+          </div>
+        `;
+
+        card.addEventListener('click', () => {
+          console.log("[Unified Portal] Clicking store to select:", site.name);
+          sendAgentAction("SELECT_STORE", { site_id: site.id });
+        });
+
+        container.appendChild(card);
+      });
+    }
+
+    // ==========================================
+    // VIEW B: Render Task List                   
+    // ==========================================
+    function renderTaskList() {
+      const activeStore = state.sites.find(s => s.id === state.active_site_id);
+      document.getElementById('active-store-name').textContent = activeStore ? activeStore.name : 'Storefront Task Queue';
+
+      const container = document.getElementById('task-items-container');
+      container.innerHTML = '';
+
+      const countSubtitle = document.getElementById('task-count-subtitle');
+      if (!state.tasks || state.tasks.length === 0) {
+        countSubtitle.textContent = '0 prioritized task executions';
+        container.innerHTML = `<div class="panel-card" style="text-align: center; color: var(--text-secondary); padding: 20px;">No active task executions in the queue for this store. You are all caught up!</div>`;
+        return;
+      }
+
+      countSubtitle.textContent = `${state.tasks.length} prioritized task executions`;
+
+      state.tasks.forEach(task => {
+        const item = document.createElement('div');
+        item.className = 'task-item-card';
+
+        let statusBadgeClass = 'pending';
+        let statusText = task.status;
+        if (task.status === 'IN_PROGRESS') statusBadgeClass = 'in_progress';
+        else if (task.status === 'COMPLETED') statusBadgeClass = 'completed';
+        else if (task.status === 'PAUSED') statusBadgeClass = 'paused';
+
+        const assignee = task.assigned_to ? task.assigned_to : 'Unassigned';
+
+        item.innerHTML = `
+          <div class="task-item-meta">
+            <div class="task-item-title">${task.title}</div>
+            <div class="task-item-badges">
+              <span class="priority-badge">Priority: ${task.priority}</span>
+              <span>Assignee: ${assignee}</span>
+            </div>
+          </div>
+          <div>
+            <span class="status-badge ${statusBadgeClass}">${statusText}</span>
+          </div>
+        `;
+
+        item.addEventListener('click', () => {
+          console.log("[Unified Portal] Selected task:", task.title);
+          sendAgentAction("VIEW_TASK", { execution_id: task.id });
+        });
+
+        container.appendChild(item);
+      });
+
+      // Bind Switch Store link
+      document.getElementById('switch-store-link').onclick = () => {
+        console.log("[Unified Portal] Clicking switch store...");
+        sendAgentAction("SELECT_STORE", { site_id: "" });
+      };
+    }
+
+    // ==========================================
+    // VIEW C: Render Task Details (Existing)     
+    // ==========================================
+    function renderTaskDetails() {
+      const task = state.active_task;
+      if (!task) return;
+
+      document.getElementById('details-task-title').textContent = task.title;
+      document.getElementById('details-task-assignee').textContent = `Assignee: ${task.assigned_to || 'Unassigned'}`;
+      
+      const activeStore = state.sites.find(s => s.id === state.active_site_id);
+      document.getElementById('details-task-store').textContent = `Store: ${activeStore ? activeStore.name : 'Volt & Vine'}`;
+
+      let statusBadgeClass = 'in_progress';
+      if (task.status === 'COMPLETED') statusBadgeClass = 'completed';
+      else if (task.status === 'PAUSED') statusBadgeClass = 'paused';
+      else if (task.status === 'PENDING') statusBadgeClass = 'pending';
+      
+      document.getElementById('details-task-status-pill').innerHTML = `<span class="status-badge ${statusBadgeClass}">${task.status}</span>`;
+
+      const stepsContainer = document.getElementById('details-steps-container');
+      stepsContainer.innerHTML = '';
+      document.getElementById('details-step-count').textContent = task.steps ? task.steps.length : 0;
+
+      let completedCount = 0;
+      let activeStep = null;
+
+      if (task.steps && task.steps.length > 0) {
+        const sortedSteps = [...task.steps].sort((a, b) => a.step - b.step);
+        
+        if (task.status === 'IN_PROGRESS') {
+          for (let s of sortedSteps) {
+            if (s.status === 'IN_PROGRESS' || s.status === 'PAUSED' || s.status === 'PENDING') {
+              activeStep = s;
+              break;
+            }
+          }
+        }
+
+        sortedSteps.forEach(step => {
+          if (step.status === 'COMPLETED') completedCount++;
+
+          const card = document.createElement('div');
+          card.className = `step-card ${step.status.toLowerCase()}`;
+          if (activeStep && step.id === activeStep.id) {
+            card.classList.add('active');
+          }
+
+          const checkmark = step.status === 'COMPLETED' ? '✓' : '';
+
+          card.innerHTML = `
+            <div class="checkbox-icon">${checkmark}</div>
+            <div class="step-details">
+              <div class="step-title">${step.title}</div>
+              <div class="step-desc">${step.description}</div>
+              <div class="step-fixture">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                Fixture: ${step.layout || 'N/A'} (X: ${step.x}, Y: ${step.y})
+              </div>
+            </div>
+          `;
+
+          card.addEventListener('click', () => {
+            focusStep(step, card);
+          });
+
+          stepsContainer.appendChild(card);
+        });
+
+        const progressPercent = Math.round((completedCount / task.steps.length) * 100);
+        document.getElementById('progress-percent-text').textContent = `${progressPercent}%`;
+        document.getElementById('progress-bar-fill').style.width = `${progressPercent}%`;
+        
+        if (activeStep) {
+          setTimeout(() => {
+            const cards = stepsContainer.querySelectorAll('.step-card');
+            const idx = sortedSteps.findIndex(s => s.id === activeStep.id);
+            if (idx !== -1 && cards[idx]) {
+              focusStep(activeStep, cards[idx]);
+            }
+          }, 100);
+        } else {
+          document.querySelectorAll('.svg-aisle, .svg-register').forEach(el => el.classList.remove('active'));
+          document.getElementById('map-beacon').style.display = 'none';
+          document.getElementById('active-location-label').textContent = 'Focus: Store Layout';
+        }
+      }
+
+      document.getElementById('back-to-tasks-btn').onclick = () => {
+        console.log("[Unified Portal] Clicking back to tasks...");
+        sendAgentAction("BACK_TO_TASKS", { site_id: state.active_site_id });
+      };
+    }
+
+    function focusStep(step, cardElement) {
+      document.querySelectorAll('.step-card').forEach(c => c.classList.remove('active'));
+      if (cardElement) {
+        cardElement.classList.add('active');
+        cardElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      document.getElementById('active-location-label').textContent = `Focus: ${step.title}`;
+      document.querySelectorAll('.svg-aisle, .svg-register').forEach(el => el.classList.remove('active'));
+      
+      const targetZoneId = `zone-${step.layout}`;
+      const svgShape = document.getElementById(targetZoneId);
+      if (svgShape) {
+        svgShape.classList.add('active');
+      }
+
+      const beacon = document.getElementById('map-beacon');
+      beacon.style.display = 'block';
+      beacon.setAttribute('transform', `translate(${step.x}, ${step.y})`);
+    }
+
+    document.querySelectorAll('.svg-aisle, .svg-register').forEach(svgEl => {
+      svgEl.addEventListener('click', () => {
+        const zoneId = svgEl.getAttribute('id').replace('zone-', '');
+        console.log("[Unified Portal] Clicked map zone:", zoneId);
+        
+        if (state.active_task && state.active_task.steps) {
+          const stepsContainer = document.getElementById('details-steps-container');
+          const cards = stepsContainer.querySelectorAll('.step-card');
+          const sortedSteps = [...state.active_task.steps].sort((a, b) => a.step - b.step);
+          
+          const matchIdx = sortedSteps.findIndex(s => s.layout === zoneId);
+          if (matchIdx !== -1 && cards[matchIdx]) {
+            focusStep(sortedSteps[matchIdx], cards[matchIdx]);
+          }
+        }
+      });
+    });
+
+    selectView();
+  </script>
+</body>
+</html>
