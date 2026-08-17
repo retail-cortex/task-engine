@@ -7,40 +7,49 @@ weight: 10
 ## Enterprise Task Engine: Master Specifications Manual (v5.0)
 
 > [!NOTE]
-> This master architectural specifications document catalogues the topological design patterns, database schemas, and platform integrations implemented inside the Enterprise Task Engine monorepo.
+> This master architectural specifications document catalogues the topological design patterns, multi-tier services, database schemas, and platform integrations implemented across the Enterprise Task Engine monorepo.
 
 ---
 
-## 1. Executive Summary & Core Use Cases
+## 1. Executive Summary & System Topology
 
-The Enterprise Task Engine is a multi-node, horizontally scalable operational platform designed to coordinate, automate, and verify physical retail operations in real-time. The system bridges core administrative configuration layers (Master Data Management) with standard dynamic workforce execution pipelines, backed by Google GenAI Vertex AI models (Gemini) and interactive agentic user interfaces (A2UI).
+The Enterprise Task Engine is a multi-node, horizontally scalable operational platform designed to coordinate, automate, and verify physical retail operations in real-time. The system bridges core administrative configuration layers (Master Data Management) with standard dynamic workforce execution pipelines, backed by Google GenAI Vertex AI models (Gemini), on-device SLMs (Gemma 2B), Google Cloud Speech Intelligence, and interactive Agentic User Interfaces (A2UI).
 
+```mermaid
+flowchart TD
+    subgraph Clients["Client Application Tier"]
+        Console["React Admin & Ops Console<br/>(web/console)<br/>• MDM Admin Panels<br/>• 3-Column Cockpit<br/>• A2UI React Factory"]
+        Mobile["GTasks Native Mobile Android<br/>(apps/gtasks)<br/>• Jetpack Compose M3<br/>• Dual-Engine LLM Tier<br/>• A2UI Compose Factory"]
+        Agentic["Agentic Voice & Map Cockpit<br/>(web/agentic)<br/>• Web Speech API<br/>• Digital Twin Map<br/>• Live SSE A2A Stream"]
+    end
+
+    subgraph Backend["Backend Service Tier"]
+        GoAPI["Core Go API Backend<br/>(cmd/server, pkg/api)<br/>• Gin REST API Routing<br/>• MCP Server (JSON-RPC 2.0)<br/>• Real-Time Voice Translation<br/>• Distributed Scheduler Daemon<br/>• GORM pgvector RAG Service"]
+        PyAgent["Python ADK Task Agent<br/>(cmd/task_agent)<br/>• FastAPI A2A Service (:8081)<br/>• A2UI v0.8 Transpiler<br/>• SVG Floor Blueprint Engine<br/>• Vertex AI ADK Agent Core"]
+    end
+
+    subgraph DataTier["Data & Cloud AI Tier"]
+        DB[("AlloyDB / PostgreSQL Cluster<br/>• Relational MDM & Task Tables<br/>• Session Advisory Locks (key: 5555)<br/>• SKIP LOCKED Parallel Worker Queues<br/>• pgvector HNSW 768-dim Vector Embeds<br/>• GORM Transaction Audit Ledgers")]
+        CloudAI["Google Cloud AI & Speech<br/>• Vertex AI Gemini 2.5 Flash<br/>• Cloud Speech-to-Text (STT)<br/>• Cloud Text-to-Speech (TTS)<br/>• Chirp 3 Instant Voice Cloning<br/>• Google Cloud Trace (Otel)"]
+    end
+
+    Console -->|"OAuth 2.0 / REST"| GoAPI
+    Mobile -->|"Retrofit / REST JSON"| GoAPI
+    Agentic -->|"SSE A2A Stream"| PyAgent
+
+    GoAPI -->|"Pinned TCP Socket (sql.Conn)"| DB
+    PyAgent -->|"pg8000 / In-Memory"| DB
+
+    GoAPI -->|"gRPC / REST API"| CloudAI
+    PyAgent -->|"GenAI SDK"| CloudAI
 ```
- ┌─────────────────────────────────────────────────────────┐
- │               INTERACTIVE CLIENT COCKPIT                │
- │    Glassmorphic A2UI React Console / Gemini Coach       │
- └───────────┬─────────────────────────────────▲───────────┘
-             │                                 │
-             │ (JSON-RPC MCP API Triggers)     │ (Grounded UI Card Layouts)
-             ▼                                 │
- ┌─────────────────────────────────────────────┴───────────┐
- │                  CORE GO BACKEND SERVER                 │
- │     Gin REST APIs, MCP Server, Distributed Scheduler    │
- └───────────┬─────────────────────────────────▲───────────┘
-             │                                 │
-             │ (Atomic transaction SQL blocks) │ (Data Streams / Row Checks)
-             ▼                                 │
- ┌─────────────────────────────────────────────┴───────────┐
- │                 ALLOYDB STATE DATABASE                  │
- │      HNSW pgvector, SKIP LOCKED queues, advisory locks  │
- └─────────────────────────────────────────────────────────┘
-```
 
-The system addresses four primary operational domains:
-1. **Master Data Management (MDM):** Provides robust administrative APIs for defining structural retail boundaries: Organizations, Sites (Stores/Warehouses), Locations (fixtures/shelves coordinates maps), Roles, Assets, Certifications, and SOPs templates.
+The system addresses five primary operational domains:
+1. **Master Data Management (MDM):** Provides robust administrative APIs and UI forms for defining structural retail boundaries: Organizations, Sites, Spatial Locations (fixtures/shelves/registers coordinate maps), Roles, Assets, Certifications, and SOP templates.
 2. **Intelligent Shift Initialization:** Automatically provisions a shift session context pool (`shift_agent_sessions`) upon user clock-in, backing the associate's Gemini ADK live preview agent coach session.
 3. **Task Auto-Generation & Prioritized Queues:** Coordinates scheduled business calendar materialization sweeps (**BATCH** chron cycles) and dynamic streaming alert ingestions (**ADHOC** sensor alarms, till out alerts, register call bells). Enforces strict asset certifications constraint checks.
-4. **Grounded AI-Assisted Operations & RAG:** Real-time dynamic alerts calculate vector embeddings, query database-indexed SOP text chunks utilizing pgvector HNSW similarity algorithms, and inject grounded SOP instructions directly inside active task checklists. Exposes rich structured layouts dynamically using Agentic UI cards (A2UI).
+4. **Grounded AI-Assisted Operations & RAG:** Real-time dynamic alerts calculate vector embeddings, query database-indexed SOP text chunks utilizing `pgvector` HNSW cosine similarity algorithms, and inject grounded SOP instructions directly inside active task checklists. Exposes rich structured layouts dynamically using Agentic UI cards (A2UI).
+5. **Speech Intelligence & Multilingual Operations:** Real-time voice translation across associate-customer dialogs, high-fidelity Studio/Journey TTS speech synthesis, and Google Cloud Chirp 3 instant custom voice cloning.
 
 ---
 
@@ -48,21 +57,16 @@ The system addresses four primary operational domains:
 
 The platform is designed to run hermetically across containerized environments under GKE, Cloud Run, and local developer sandboxes using the following stacks:
 
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                                SYSTEM STACK                                  │
-├──────────────────┬───────────────────────────────────────────────────────────┤
-│ Backend Platform │ Go (Golang) Gin API Server Engine, GORM postgres ORM     │
-├──────────────────┼───────────────────────────────────────────────────────────┤
-│ AI Intelligence  │ Model Context Protocol (MCP) Server, Vertex AI Gemini     │
-├──────────────────┼───────────────────────────────────────────────────────────┤
-│ Database Tier    │ AlloyDB / PostgreSQL Cluster, pgvector HNSW indexes       │
-├──────────────────┼───────────────────────────────────────────────────────────┤
-│ User Interfaces  │ React 19 Frontend Dashboard SPA, Vite TypeScript, A2UI    │
-├──────────────────┼───────────────────────────────────────────────────────────┤
-│ Infrastructure   │ Terraform IaC, Docker, Google Cloud Run / GKE, Otel Trace │
-└──────────────────┴───────────────────────────────────────────────────────────┘
-```
+| Architectural Tier | Selected Technology & Platform |
+| :--- | :--- |
+| **Backend Platform** | Go (Golang) Gin API Server Engine, GORM postgres ORM |
+| **AI Intelligence** | Model Context Protocol (MCP) Server, Vertex AI Gemini |
+| **Agent Framework** | Google Agent Development Kit (ADK), FastAPI, Python 3.13 |
+| **Speech & Voice** | Google Cloud STT, Neural Translation, TTS, Chirp 3 Clone |
+| **Database Tier** | AlloyDB / PostgreSQL Cluster, `pgvector` HNSW indexes |
+| **Mobile Handset** | Kotlin, Jetpack Compose M3, Retrofit 2, MediaPipe Gemma |
+| **User Interfaces** | React 19 Frontend Dashboard SPA, Vite TypeScript, A2UI |
+| **Build & CI/CD** | Bazel 8 (bzlmod), Docker Distroless, OpenTelemetry Traces |
 
 ---
 
@@ -72,8 +76,8 @@ To support dozens of active horizontal microservice replicas without requiring c
 
 ### A. Distributed Leader Election & Advisory Locking
 Leader election limits chron sweeps, document updates scans, and lock timeout watchdogs to a single active server replica, avoiding double sweeps:
-* **PostgreSQL Advisory Locks:** Cluster replicas bid for leadership on startup and checks loops by requesting a session-bound Postgres advisory lock on key `5555`.
-* **TCP Connection Pinned Sockets (`sql.Conn`):** Standard pooled database clients recycle net connections, causing session locks to be dropped. The scheduler prevents this by reserving a single dedicated TCP socket direct from the driver pool context (`sqlDB.Conn`), pinning the advisory lock exclusively to this dedicated connection loop context.
+* **PostgreSQL Advisory Locks:** Cluster replicas bid for leadership on startup and check loops by requesting a session-bound Postgres advisory lock on key `5555`.
+* **TCP Connection Pinned Sockets (`sql.Conn`):** Standard pooled database clients recycle net connections, causing session locks to be dropped. The scheduler prevents this by reserving a single dedicated TCP socket directly from the driver pool context (`sqlDB.Conn`), pinning the advisory lock exclusively to this dedicated connection loop context.
 * **Self-Healing Failover:** If the active leader node crashes, Postgres automatically drops the TCP pool after standard keep-alive intervals, releasing the advisory lock key instantly so worker nodes bid on leadership in their next `15s` check sweep.
 
 ### B. Concurrency-Safe SKIP LOCKED Parallel Workers
@@ -123,11 +127,28 @@ Operational routes are used by floor associates, client dashboards, and Vertex A
 
 * `GET /health/readiness` - Diagnostic target to verify active AlloyDB pools connectivity.
 * `GET /static/*` - Served natively by the Go server filesystem engine to resolve static SOP documents templates.
+* `POST /api/v1/mcp` - Global Model Context Protocol (MCP) JSON-RPC 2.0 endpoint.
 * `POST /api/v1/sessions/shift/{shiftId}/chat` - Primary Vertex AI Gemini MCP JSON-RPC conversational endpoint.
-* `GET /api/v1/organizations/{orgId}/sites/{siteId}/tasks` - Fetches prioritized, active site queues (filterable by local spatial location coordinates).
+* `POST /api/v1/organizations/{orgId}/sites/{siteId}/users/{userId}/sessions/shift/{shiftId}/message` - Conversational agent orchestrator chat endpoint.
+* `GET /api/v1/organizations/{orgId}/sites/{siteId}/tasks` - Fetches prioritized, active site queues.
 * `PATCH /api/v1/organizations/{orgId}/sites/{siteId}/tasks/{id}/status` - Mutates checklist task statuses, executing GORM hook ledgers.
 * `POST /api/v1/organizations/{orgId}/sites/{siteId}/tasks/{id}/override` - Bypasses constraints by submitting supervisor justification tags.
+* `POST /api/v1/organizations/{orgId}/sites/{siteId}/tasks/{id}/claim` - Claims/takes ownership of active tasks.
 * `POST /api/v1/organizations/{orgId}/sites/{siteId}/trades` - Initiates peer-to-peer shift and task trades.
+* `GET /api/v1/organizations/{orgId}/sites/{siteId}/trades` - Lists pending trade proposals.
+* `POST /api/v1/organizations/{orgId}/sites/{siteId}/trades/{tradeId}/accept` - Accepts a pending trade.
+* `POST /api/v1/organizations/{orgId}/sites/{siteId}/trades/{tradeId}/reject` - Rejects a pending trade.
+* `POST /api/v1/organizations/{orgId}/sites/{siteId}/alerts` - Ingests ad-hoc streaming alerts (till drop, spill, stockout).
+
+### C. Voice Translation & Profile Routes
+* `GET /api/v1/profile/:id` - Retrieves associate language and voice profile.
+* `POST /api/v1/profile/:id` - Initializes associate voice profile.
+* `PUT /api/v1/profile/:id` - Updates language/voice preferences.
+* `POST /api/v1/profile/:id/voice/clone` - Uploads consent recording and generates Chirp 3 voice clone key.
+* `POST /api/v1/translate/talk` - Transcribes associate speech, translates, and synthesizes target language audio.
+* `POST /api/v1/translate/listen` - Transcribes customer speech, translates, and synthesizes associate language audio.
+* `GET /api/v1/translate/voices` - Lists available Google Cloud HD Studio and Journey voices.
+* `POST /api/v1/translate/preview` - Synthesizes voice model audio preview.
 
 ---
 
@@ -139,379 +160,25 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "vector"; -- pgvector extension mapping
 ```
 
-### A. Organization, Spatial & Identity Schemas
-```sql
-CREATE TABLE organizations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) NOT NULL UNIQUE,
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    o_auth_provider VARCHAR(50) NOT NULL,
-    o_auth_id VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    name VARCHAR(255),
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    version INT NOT NULL DEFAULT 1,
-    UNIQUE (o_auth_provider, o_auth_id)
-);
-
-CREATE TABLE user_organizations (
-    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    PRIMARY KEY (organization_id, user_id)
-);
-
-CREATE TABLE roles (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) NOT NULL UNIQUE,
-    description TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE user_roles (
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    PRIMARY KEY (user_id, role_id)
-);
-
-CREATE TABLE sites (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    name VARCHAR(255) NOT NULL,
-    site_type VARCHAR(50) NOT NULL DEFAULT 'STORE',
-    altitude_meters DECIMAL(10, 4) NOT NULL DEFAULT 0.0,
-    icao_code VARCHAR(10) NOT NULL DEFAULT '',
-    address TEXT,
-    latitude DECIMAL(10, 8),
-    longitude DECIMAL(11, 8),
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    version INT NOT NULL DEFAULT 1
-);
-
-CREATE TABLE user_sites (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
-    is_primary BOOLEAN NOT NULL DEFAULT FALSE,
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (user_id, site_id)
-);
-
-CREATE TABLE locations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
-    parent_id UUID REFERENCES locations(id) ON DELETE CASCADE DEFAULT NULL,
-    name VARCHAR(255) NOT NULL,
-    location_type VARCHAR(50) NOT NULL DEFAULT 'FIXTURE',
-    location_function_type VARCHAR(50) NOT NULL DEFAULT 'DISPLAY',
-    x DECIMAL(10, 4) NOT NULL DEFAULT 0.0,
-    y DECIMAL(10, 4) NOT NULL DEFAULT 0.0,
-    z DECIMAL(10, 4) NOT NULL DEFAULT 0.0,
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-### B. Assets & Certification Schemas
-```sql
-CREATE TABLE assets (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    location_id UUID NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
-    name VARCHAR(255) NOT NULL,
-    asset_tag VARCHAR(100) UNIQUE,
-    status VARCHAR(50) NOT NULL DEFAULT 'AVAILABLE',
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    version INT NOT NULL DEFAULT 1
-);
-
-CREATE TABLE certifications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) NOT NULL,
-    issuer VARCHAR(255),
-    description TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    version INT NOT NULL DEFAULT 1
-);
-
-CREATE TABLE user_certifications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    certification_id UUID NOT NULL REFERENCES certifications(id) ON DELETE CASCADE,
-    issued_date TIMESTAMPTZ NOT NULL,
-    expiration_date TIMESTAMPTZ,
-    status VARCHAR(50) NOT NULL DEFAULT 'ACTIVE',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    version INT NOT NULL DEFAULT 1,
-    UNIQUE (user_id, certification_id)
-);
-```
-
-### C. Grounded SOP Documents & RAG Schemas
-```sql
-CREATE TABLE sops (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title VARCHAR(255) NOT NULL,
-    canonical_url VARCHAR(1024),
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb, -- Maps ETags, file checksums, expiration dates
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE sop_processes (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    sop_id UUID NOT NULL REFERENCES sops(id) ON DELETE CASCADE,
-    chunking_strategy VARCHAR(100) NOT NULL,
-    embedding_model VARCHAR(100) NOT NULL,
-    status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
-    is_active BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE sop_chunks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    sop_id UUID NOT NULL REFERENCES sops(id) ON DELETE CASCADE,
-    sop_process_id UUID NOT NULL REFERENCES sop_processes(id) ON DELETE CASCADE,
-    chunk_index INT NOT NULL,
-    content TEXT NOT NULL,
-    embedding VECTOR(768) NOT NULL, -- pgvector structural field mapping (768 dimensions)
-    UNIQUE (sop_process_id, chunk_index)
-);
-
--- pgvector Index Definition utilizing HNSW algorithms
-CREATE INDEX ON sop_chunks USING hnsw (embedding vector_cosine_ops);
-
-CREATE TABLE task_sops (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-    sop_id UUID NOT NULL REFERENCES sops(id) ON DELETE CASCADE,
-    UNIQUE (task_id, sop_id)
-);
-```
-
-### D. Workforces Scheduling, Shifts & Materialized Events
-```sql
-CREATE TABLE events (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organizer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    site_id UUID REFERENCES sites(id) ON DELETE SET NULL,
-    task_id UUID REFERENCES tasks(id) ON DELETE RESTRICT,
-    name VARCHAR(255) NOT NULL,
-    event_type VARCHAR(100) NOT NULL DEFAULT 'RetailShift', -- Classifications
-    event_style VARCHAR(20) NOT NULL DEFAULT 'BATCH', -- BATCH or ADHOC category maps
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE user_event_schedules (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    start_date TIMESTAMPTZ NOT NULL,
-    end_date TIMESTAMPTZ NOT NULL,
-    timezone VARCHAR(50) NOT NULL,
-    rrule TEXT, -- RFC 5545 Recurrence string rules (Standard Scheduled Batch runs)
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (user_id, event_id)
-);
-
-CREATE TABLE user_event_instances (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    schedule_id UUID NOT NULL REFERENCES user_event_schedules(id) ON DELETE CASCADE,
-    instance_start_date TIMESTAMPTZ NOT NULL,
-    instance_end_date TIMESTAMPTZ NOT NULL,
-    event_status VARCHAR(50) NOT NULL DEFAULT 'EventScheduled', -- Schema.org align
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (schedule_id, instance_start_date)
-);
-```
-
-### E. Task Execution Queues, Audits & Trades ledgers
-```sql
-CREATE TABLE tasks (
-    id PRIMARY KEY DEFAULT gen_random_uuid(),
-    parent_task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    task_type VARCHAR(50) NOT NULL DEFAULT 'STANDARD',
-    target_role_id UUID REFERENCES roles(id) ON DELETE SET NULL,
-    priority INT NOT NULL DEFAULT 3,
-    step_order INT DEFAULT 0,
-    estimated_duration_minutes INT,
-    checklist_template JSONB DEFAULT '[]'::jsonb,
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    version INT NOT NULL DEFAULT 1
-);
-
-CREATE TABLE task_assets (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-    asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
-    is_consumable BOOLEAN NOT NULL DEFAULT FALSE,
-    quantity_required INT DEFAULT 1,
-    is_hard_blocker BOOLEAN NOT NULL DEFAULT FALSE,
-    UNIQUE (task_id, asset_id)
-);
-
-CREATE TABLE task_approval_rules (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-    required_role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    timing VARCHAR(50) NOT NULL DEFAULT 'POST_EXECUTION',
-    is_strict BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE task_executions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    task_template_id UUID NOT NULL REFERENCES tasks(id) ON DELETE RESTRICT,
-    parent_execution_id UUID REFERENCES task_executions(id) ON DELETE CASCADE,
-    execution_type VARCHAR(50) NOT NULL DEFAULT 'STANDARD',
-    subject_execution_id UUID REFERENCES task_executions(id) ON DELETE CASCADE,
-    initiator_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    assignee_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    event_instance_id UUID NOT NULL REFERENCES user_event_instances(id) ON DELETE CASCADE,
-    description TEXT DEFAULT NULL, -- Enriched dynamic RAG compliance context text
-    status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
-    priority INT NOT NULL DEFAULT 3,
-    due_at TIMESTAMPTZ,
-    prerequisite_execution_id UUID REFERENCES task_executions(id) ON DELETE SET NULL,
-    decision VARCHAR(50),
-    completed_at TIMESTAMPTZ,
-    checklist_state JSONB DEFAULT '{}'::jsonb,
-    override_flags JSONB NOT NULL DEFAULT '{}'::jsonb,
-    
-    -- Multi-node scheduler transaction locks tracking fields
-    locked_at TIMESTAMPTZ DEFAULT NULL,
-    locked_by VARCHAR(100) DEFAULT NULL,
-    retry_count INT NOT NULL DEFAULT 0,
-    max_retries INT NOT NULL DEFAULT 3,
-    last_error TEXT DEFAULT NULL,
-    
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    version INT NOT NULL DEFAULT 1
-);
-
--- Mapped index optimized for SKIP LOCKED transaction polls speed
-CREATE INDEX idx_executions_locked ON task_executions(status, locked_at);
-
-CREATE TABLE task_execution_audits (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    task_execution_id UUID NOT NULL REFERENCES task_executions(id) ON DELETE CASCADE,
-    changed_by_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    action_type VARCHAR(50) NOT NULL,
-    previous_state JSONB,
-    new_state JSONB,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE task_trades (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    task_execution_id UUID NOT NULL REFERENCES task_executions(id) ON DELETE CASCADE,
-    initiator_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    proposed_assignee_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    version INT NOT NULL DEFAULT 1
-);
-```
-
-### F. Shift Coach Sessions context
-```sql
-CREATE TABLE shift_agent_sessions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    assignee_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    shift_instance_id UUID NOT NULL REFERENCES user_event_instances(id) ON DELETE CASCADE,
-    message_history JSONB NOT NULL DEFAULT '[]'::jsonb,
-    session_context JSONB NOT NULL DEFAULT '{}'::jsonb,
-    status VARCHAR(50) NOT NULL DEFAULT 'ACTIVE',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    version INT NOT NULL DEFAULT 1,
-    UNIQUE (assignee_id, shift_instance_id)
-);
-```
+### Key Relational Tables Summary
+- **Identity & Organization:** `organizations`, `users`, `user_organizations`, `roles`, `user_roles`, `sites`, `user_sites`, `locations`.
+- **Assets & Certifications:** `assets`, `certifications`, `user_certifications`.
+- **Grounded SOP Documents & Vectors:** `sops`, `sop_processes`, `sop_chunks` (`embedding VECTOR(768)` with HNSW cosine index `hnsw (embedding vector_cosine_ops)`), `task_sops`.
+- **Workforces & Shifts:** `events`, `user_event_schedules`, `user_event_instances`.
+- **Task Execution & Audits:** `tasks`, `task_assets`, `task_approval_rules`, `task_executions` (`locked_at`, `locked_by`, `retry_count`, `max_retries`, `last_error`, `description`), `task_execution_audits`, `task_trades`.
+- **Agent Sessions Context:** `shift_agent_sessions` (`assignee_id`, `shift_instance_id`, `message_history`, `session_context`).
 
 ---
 
-## 6. Interactive Frontend & A2UI Cockpit (`web/console`)
+## 6. Comprehensive Topic Specifications
 
-The floor associate's client operations cockpit is designed as a **Glassmorphic A2UI Operations Console** built on React, Vite, and tailwind typography. Exposes the following visual tiers:
-1. **Glassmorphic Dashboard cockpit:** Radial glow dark themes, tailored neon priority glows indicators, interactive lists grid panels, and full Dev mock fallbacks.
-2. **actions column styling (flex justify-end):** Mapped natively to prevent horizontal wrapping.
-3. **A2UI Spatial coordinates map:** Integrated SVG architectural blueprint coordinates map of the store layout displaying pulsating focus target beacons.
-4. **Hanna conversational coach chat & Suggestions chips:** Direct chat dialog returns coaching sarcasms and enqueues **dynamic visual A2UI Cards**:
-   * **Cash Drop Card:** displays cash drawer drops checklists, security vault coordinates, and provides a direct supervisor bypass/verify trigger button.
-   * **Shift Trade Card:** renders side-by-side shift comparison grids with direct makerchecker action swap buttons.
-   * **METAR Wind Card:** visualizes airport wind audit parameters.
-
----
-
-## 7. Infrastructure, Deployment & Observability
-
-### A. Shaded distroless containers on GKE / Cloud Run
-Backend compiled Go statically-linked executable binaries package directly inside minimal distroless Docker container configurations to keep production attack surfaces minimal. Leverages GCP Cloud Run scalability, scaling to zero upon inactive cycles.
-
-### B. Otel & Structured Logs Correlation
-OpenTelemetry maps correlation hooks throughout database transactions and AI sessions. JSON trace telemetry is written out, routing structured correlation IDs seamlessly across GORM audit engines, MCP tool execution runs, and Cloud Logging stacks.
-
-### C. Terraform IaC Modules provisioning AlloyDB
-Standard Terraform HCL maps corporate subnets, AlloyDB clusters, and pgvector HNSW index configurations cleanly. State files are securely locked and persisted under a primary GCS backend bucket:
-
-```hcl
-terraform {
-  required_version = ">= 1.5.0"
-  backend "gcs" {
-    bucket = "nexus-tasking-tfstate"
-    prefix = "env/prod"
-  }
-  required_providers {
-    google = { source = "hashicorp/google", version = "~> 5.0" }
-  }
-}
-
-resource "google_storage_bucket" "sop_bucket" {
-  name                        = "retail-tasking-sops-${var.env}"
-  location                    = "US"
-  uniform_bucket_level_access = true
-}
-
-resource "google_alloydb_cluster" "primary" {
-  cluster_id = "tasking-db-cluster"
-  location   = "us-central1"
-  network    = google_compute_network.vpc.id
-}
-
-resource "google_cloud_run_v2_service" "api_backend" {
-  name     = "tasking-api-backend"
-  location = "us-central1"
-  template {
-    containers {
-      image = "us-docker.pkg.dev/${var.project}/repo/backend:latest"
-      liveness_probe {
-        http_get {
-          path = "/health/readiness"
-        }
-      }
-      env {
-        name  = "DB_HOST"
-        value = google_alloydb_instance.primary.ip_address
-      }
-    }
-  }
-}
-```
+For deep dives into specialized subsystems, refer to the following dedicated manuals:
+- **[App & UI Workflows]({{< ref "apps_and_ui.md" >}}):** Complete guide to React Console, GTasks Android app, and Dual LLM reasoning.
+- **[A2UI Architecture & Engine]({{< ref "a2ui_architecture.md" >}}):** A2UI v0.8 protocol, MCP tools, and multi-platform rendering engines.
+- **[Voice Translation & Speech Intelligence]({{< ref "voice_and_translation.md" >}}):** Google Cloud STT, Translation, TTS, and Chirp 3 voice cloning.
+- **[Event-Driven Operations Specification]({{< ref "events.md" >}}):** ARTS XML and Schema.org event taxonomies and streaming triggers.
+- **[Background Job Scheduler Daemon Guide]({{< ref "scheduler.md" >}}):** Distributed leader election, advisory locks, and watchdog recovery.
+- **[Workspace Directory & Store Mapping Specifications]({{< ref "store_information.md" >}}):** Google Workspace OU tree and 109-store test identity matrix.
+- **[Google Cloud & OAuth Setup Guide]({{< ref "cloud_setup.md" >}}):** GCP project provisioning, OAuth consent screens, and credentials.
+- **[Android Handset App Guide]({{< ref "android_setup.md" >}}):** Gradle, ADB reverse port forwarding, and handset deployment.
+- **[Governance, Licensing & Design Decisions]({{< ref "governance_and_licensing.md" >}}):** Apache 2.0 licensing, authorship, and architectural decision trade-offs.

@@ -21,19 +21,19 @@
   --font-mono: 'JetBrains Mono', monospace;
 
   /* Premium Dark Theme Color Tokens */
-  --bg-main: #060814;
-  --bg-card: rgba(13, 17, 34, 0.45);
-  --bg-card-hover: rgba(20, 26, 51, 0.6);
-  --bg-input: rgba(8, 10, 24, 0.6);
-  --border-glow: rgba(99, 102, 241, 0.15);
+  --bg-main: #041f41;
+  --bg-card: rgba(9, 46, 92, 0.45);
+  --bg-card-hover: rgba(15, 61, 122, 0.6);
+  --bg-input: rgba(3, 23, 48, 0.6);
+  --border-glow: rgba(0, 113, 206, 0.15);
   --border-muted: rgba(255, 255, 255, 0.05);
 
-  --color-primary: #6366f1;       /* Electric Indigo */
-  --color-primary-glow: rgba(99, 102, 241, 0.35);
-  --color-secondary: #8b5cf6;     /* Bright Violet */
-  --color-secondary-glow: rgba(139, 92, 246, 0.25);
-  --color-accent: #10b981;        /* Emerald Green */
-  --color-accent-glow: rgba(16, 185, 129, 0.25);
+  --color-primary: #0071ce;       /* Walmart Blue */
+  --color-primary-glow: rgba(0, 113, 206, 0.35);
+  --color-secondary: #eb148d;     /* Pink */
+  --color-secondary-glow: rgba(235, 20, 141, 0.25);
+  --color-accent: #ffc220;        /* Spark Yellow */
+  --color-accent-glow: rgba(255, 194, 32, 0.25);
   --color-warning: #f59e0b;       /* Amber */
   --color-critical: #ef4444;      /* Coral Red */
   --color-critical-glow: rgba(239, 68, 68, 0.3);
@@ -54,8 +54,8 @@ body {
   font-family: var(--font-sans);
   overflow-x: hidden;
   background-image: 
-    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.08) 0px, transparent 50%);
+    radial-gradient(at 0% 0%, rgba(0, 113, 206, 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(235, 20, 141, 0.08) 0px, transparent 50%);
   min-height: 100vh;
 }
 
@@ -269,7 +269,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 30px 20px;
-  background: radial-gradient(circle at center, rgba(99, 102, 241, 0.05) 0%, transparent 70%);
+  background: radial-gradient(circle at center, rgba(0, 113, 206, 0.05) 0%, transparent 70%);
   border-bottom: 1px solid var(--border-muted);
   position: relative;
 }
@@ -278,10 +278,10 @@ body {
   width: 90px;
   height: 90px;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #8b5cf6 0%, #6366f1 60%, #4338ca 100%);
+  background: radial-gradient(circle at 30% 30%, #eb148d 0%, #0071ce 60%, #004c8c 100%);
   box-shadow: 
-    0 0 30px rgba(99, 102, 241, 0.3),
-    0 0 60px rgba(139, 92, 246, 0.15),
+    0 0 30px rgba(0, 113, 206, 0.3),
+    0 0 60px rgba(235, 20, 141, 0.15),
     inset -5px -5px 15px rgba(0, 0, 0, 0.4),
     inset 5px 5px 10px rgba(255, 255, 255, 0.2);
   cursor: pointer;

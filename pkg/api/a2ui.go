@@ -47,6 +47,7 @@ type ComponentWrapper struct {
 	CheckBox       *CheckBoxProps       `json:"CheckBox,omitempty"`
 	Image          *ImageProps          `json:"Image,omitempty"`
 	MultipleChoice *MultipleChoiceProps `json:"MultipleChoice,omitempty"`
+	WebFrameSrcdoc *WebFrameSrcdocProps `json:"WebFrameSrcdoc,omitempty"`
 	Divider        *struct{}            `json:"Divider,omitempty"`
 }
 
@@ -122,6 +123,11 @@ type ImageProps struct {
 	URL *BoundValue `json:"url"`
 }
 
+type WebFrameSrcdocProps struct {
+	HtmlContent *BoundValue `json:"htmlContent"`
+	Height      int         `json:"height"`
+}
+
 type MultipleChoiceOption struct {
 	Label *BoundValue `json:"label"`
 	Value string      `json:"value"`
@@ -161,18 +167,18 @@ func GetAgentStyles() map[string]string {
 		"--font-sans":            "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
 		"--font-display":         "'Outfit', var(--font-sans)",
 		"--font-mono":            "'JetBrains Mono', monospace",
-		"--bg-main":              "#060814",
-		"--bg-card":              "rgba(13, 17, 34, 0.45)",
-		"--bg-card-hover":        "rgba(20, 26, 51, 0.6)",
-		"--bg-input":             "rgba(8, 10, 24, 0.6)",
-		"--border-glow":          "rgba(99, 102, 241, 0.15)",
+		"--bg-main":              "#041f41",
+		"--bg-card":              "rgba(9, 46, 92, 0.45)",
+		"--bg-card-hover":        "rgba(15, 61, 122, 0.6)",
+		"--bg-input":             "rgba(3, 23, 48, 0.6)",
+		"--border-glow":          "rgba(0, 113, 206, 0.15)",
 		"--border-muted":         "rgba(255, 255, 255, 0.05)",
-		"--color-primary":        "#6366f1",
-		"--color-primary-glow":   "rgba(99, 102, 241, 0.35)",
-		"--color-secondary":      "#8b5cf6",
-		"--color-secondary-glow": "rgba(139, 92, 246, 0.25)",
-		"--color-accent":         "#10b981",
-		"--color-accent-glow":    "rgba(16, 185, 129, 0.25)",
+		"--color-primary":        "#0071ce",
+		"--color-primary-glow":   "rgba(0, 113, 206, 0.35)",
+		"--color-secondary":      "#eb148d",
+		"--color-secondary-glow": "rgba(235, 20, 141, 0.25)",
+		"--color-accent":         "#ffc220",
+		"--color-accent-glow":    "rgba(255, 194, 32, 0.25)",
 		"--color-warning":        "#f59e0b",
 		"--color-critical":       "#ef4444",
 		"--color-critical-glow":  "rgba(239, 68, 68, 0.3)",
@@ -712,6 +718,28 @@ func NormalizeCardToA2UITransaction(legacyCard map[string]interface{}, surfaceID
 				Component: ComponentWrapper{
 					Image: &ImageProps{
 						URL: LiteralString(imgURL),
+					},
+				},
+			})
+			return compID
+
+		case "webframe", "webframesrcdoc":
+			compID := nextID("webframe")
+			htmlVal := getString(node, "htmlContent")
+			if htmlVal == "" {
+				htmlVal = getString(node, "html_content")
+			}
+			heightVal := getInt(node, "height")
+			if heightVal == 0 {
+				heightVal = 300
+			}
+
+			components = append(components, A2UIComponent{
+				ID: compID,
+				Component: ComponentWrapper{
+					WebFrameSrcdoc: &WebFrameSrcdocProps{
+						HtmlContent: LiteralString(htmlVal),
+						Height:      heightVal,
 					},
 				},
 			})

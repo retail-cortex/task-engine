@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "service",
@@ -39,5 +39,24 @@ go_library(
         "@io_gorm_gorm//:gorm",
         "@org_golang_x_oauth2//google",
         "@org_golang_x_text//language",
+    ],
+)
+
+go_test(
+    name = "service_test",
+    srcs = [
+        "admin_test.go",
+        "scheduler_unit_test.go",
+        "translation_test.go",
+    ],
+    embed = [":service"],
+    deps = [
+        "//pkg/model",
+        "//pkg/persistence",
+        "@com_github_stretchr_testify//assert",
+        "@com_google_cloud_go_texttospeech//apiv1/texttospeechpb",
+        "@io_gorm_gorm//:gorm",
+        "@io_gorm_gorm//clause",
+        "@io_gorm_gorm//schema",
     ],
 )

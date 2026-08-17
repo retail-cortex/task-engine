@@ -46,3 +46,26 @@ limitations under the License.
 {{ with $script.Content }}
   <script>{{ . | safeJS }}</script>
 {{ end }}
+
+<!-- Mermaid.js Dynamic Diagram Rendering Engine -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'neutral',
+    securityLevel: 'loose',
+    flowchart: {
+      useMaxWidth: true,
+      htmlLabels: true,
+      curve: 'basis'
+    },
+    themeVariables: {
+      primaryColor: '#0071ce',
+      primaryTextColor: '#ffffff',
+      primaryBorderColor: '#005bb5',
+      lineColor: '#0071ce',
+      secondaryColor: '#f0f7ff',
+      tertiaryColor: '#ffffff'
+    }
+  });
+</script>

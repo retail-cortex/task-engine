@@ -62,12 +62,13 @@ To resolve this, the transpiler dynamically collapses lists of two or more butto
 1. **MultipleChoice Component**: Configured with `maxAllowedSelections: 1` to act as a single-select dropdown.
 2. **Submit Button**: Placed below the dropdown, referencing the selection path (e.g., `{"path": "/store_switcher/selected"}`) to retrieve the chosen location ID and trigger the action.
 
-```
-┌──────────────────────────────────────┐
-│  [Select Store Storefront Dropdown]  │
-├──────────────────────────────────────┤
-│  [Submit: Switch Store Button]       │
-└──────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph CardRoot["Card Container"]
+        Dropdown["MultipleChoice (maxAllowedSelections: 1)<br/>Options: Store #1000 - Dallas | Volt & Vine - Seattle<br/>Selection Path: /store_switcher/selected"]
+        SubmitBtn["Button: 'Switch Store'<br/>Action: SET_STORE (references /store_switcher/selected)"]
+        Dropdown --> SubmitBtn
+    end
 ```
 
 ---

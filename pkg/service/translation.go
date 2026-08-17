@@ -185,14 +185,21 @@ func (s *translationService) TranslateListen(ctx context.Context, associateID, c
 }
 
 func (s *translationService) ListHDVoices(ctx context.Context) ([]*HDVoice, error) {
+	if s.ttsClient == nil {
+		return nil, fmt.Errorf("ttsClient is not initialized")
+	}
 	req := &ttspb.ListVoicesRequest{}
 	resp, err := s.ttsClient.ListVoices(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list voices: %w", err)
 	}
 
+	return mapHDVoices(resp.Voices), nil
+}
+
+func mapHDVoices(voices []*ttspb.Voice) []*HDVoice {
 	var list []*HDVoice
-	for _, v := range resp.Voices {
+	for _, v := range voices {
 		name := v.Name
 		quality := ""
 		if strings.Contains(name, "-Chirp3-HD-") {
@@ -223,7 +230,7 @@ func (s *translationService) ListHDVoices(ctx context.Context) ([]*HDVoice, erro
 			})
 		}
 	}
-	return list, nil
+	return list
 }
 
 // Private helper for speech-to-text transcription.
@@ -280,6 +287,10 @@ func (s *translationService) transcribe(ctx context.Context, audioBytes []byte, 
 		},
 	}
 
+	if s.speechClient == nil {
+		return "", fmt.Errorf("speechClient is not initialized")
+	}
+
 	resp, err := s.speechClient.Recognize(ctx, req)
 	if err != nil {
 		return "", err
@@ -303,6 +314,10 @@ func (s *translationService) translateText(ctx context.Context, text, sourceLang
 	sourceTag, err := language.Parse(sourceLang)
 	if err != nil {
 		return "", fmt.Errorf("invalid source language code: %w", err)
+	}
+
+	if s.transClient == nil {
+		return "", fmt.Errorf("transClient is not initialized")
 	}
 
 	resp, err := s.transClient.Translate(ctx, []string{text}, targetTag, &translate.Options{
@@ -330,6 +345,10 @@ func (s *translationService) synthesize(ctx context.Context, text string, voice 
 		AudioConfig: &ttspb.AudioConfig{
 			AudioEncoding: ttspb.AudioEncoding_MP3, // Stream back MP3 bytes
 		},
+	}
+
+	if s.ttsClient == nil {
+		return nil, fmt.Errorf("ttsClient is not initialized")
 	}
 
 	resp, err := s.ttsClient.SynthesizeSpeech(ctx, req)
@@ -415,6 +434,25 @@ func (s *translationService) resolveVoiceParams(targetLang string, user *model.U
 	return s.resolveHDVoice(targetLang, user.VoiceGenderPreference)
 }
 
+func resolveVoiceConsentScript(languageCode string) string {
+	consentScript := "I am the owner of this voice and I consent to Google using this voice to create a synthetic voice model."
+	cleanLang := strings.ToLower(languageCode)
+	if strings.HasPrefix(cleanLang, "es") {
+		consentScript = "Soy el propietario de esta voz y doy mi consentimiento para que Google la utilice para crear un modelo de voz sintética."
+	} else if strings.HasPrefix(cleanLang, "fr") {
+		consentScript = "Je suis le propriétaire de cette voix et j'autorise Google à utiliser cette voix pour créer un modèle de voix synthétique."
+	} else if strings.HasPrefix(cleanLang, "de") {
+		consentScript = "Ich bin der Eigentümer dieser Stimme und bin damit einverstanden, dass Google diese Stimme zur Erstellung eines synthetischen Stimmmodells verwendet."
+	} else if strings.HasPrefix(cleanLang, "it") {
+		consentScript = "Sono il proprietario di questa voce e acconsento che Google la utilizzi per creare un modelo di voce sintetica."
+	} else if strings.HasPrefix(cleanLang, "ja") {
+		consentScript = "私はこの音声の所有者であり、Googleがこの音声を使用して音声合成モデルを作成することを承認します。"
+	} else if strings.HasPrefix(cleanLang, "ko") {
+		consentScript = "나는 이 음성의 소유자이며 구글이 이 음성을 사용하여 음성 합성 모델을 생성할 것을 허용합니다。"
+	}
+	return consentScript
+}
+
 func (s *translationService) GenerateVoiceCloningKey(ctx context.Context, consentAudio []byte, languageCode string) (string, error) {
 	log.Printf("[TTS] Requesting Chirp 3 Instant Custom Voice Cloning Key from Google Cloud...")
 
@@ -434,22 +472,7 @@ func (s *translationService) GenerateVoiceCloningKey(ctx context.Context, consen
 	}
 
 	// 3. Map consent script to the exact compliance wording based on language code
-	// We must pass the exact verbatim statement that matches the spoken audio!
-	consentScript := "I am the owner of this voice and I consent to Google using this voice to create a synthetic voice model."
-	cleanLang := strings.ToLower(languageCode)
-	if strings.HasPrefix(cleanLang, "es") {
-		consentScript = "Soy el propietario de esta voz y doy mi consentimiento para que Google la utilice para crear un modelo de voz sintética."
-	} else if strings.HasPrefix(cleanLang, "fr") {
-		consentScript = "Je suis le propriétaire de cette voix et j'autorise Google à utiliser cette voix pour créer un modèle de voix synthétique."
-	} else if strings.HasPrefix(cleanLang, "de") {
-		consentScript = "Ich bin der Eigentümer dieser Stimme und bin damit einverstanden, dass Google diese Stimme zur Erstellung eines synthetischen Stimmmodells verwendet."
-	} else if strings.HasPrefix(cleanLang, "it") {
-		consentScript = "Sono il proprietario di questa voce e acconsento che Google la utilizzi per creare un modelo di voce sintetica."
-	} else if strings.HasPrefix(cleanLang, "ja") {
-		consentScript = "私はこの音声の所有者であり、Googleがこの音声を使用して音声合成モデルを作成することを承認します。"
-	} else if strings.HasPrefix(cleanLang, "ko") {
-		consentScript = "나는 이 음성의 소유자이며 구글이 이 음성을 사용하여 음성 합성 모델을 생성할 것을 허용합니다。"
-	}
+	consentScript := resolveVoiceConsentScript(languageCode)
 
 	// 4. Encode audio content (PCM LINEAR16 16kHz Mono) to Base64
 	base64Audio := base64.StdEncoding.EncodeToString(consentAudio)

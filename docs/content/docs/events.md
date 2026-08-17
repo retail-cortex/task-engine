@@ -64,21 +64,16 @@ Adhoc events reflect the real-time, streaming nature of dynamic store change, ca
 
 Event materializations follow standard Schema.org `EventStatusType` mapping, supplemented by operational runtime status changes:
 
-```
-                  ┌───────────────┐
-                  │   Scheduled   │ (Materialized from RRULE / Calendar)
-                  └───────┬───────┘
-                          │
-            ┌─────────────┼─────────────┐
-            ▼             ▼             ▼
-     ┌───────────┐  ┌───────────┐  ┌───────────┐
-     │ Cancelled │  │ Postponed │  │  Active   │ (Associate shift Clock-in)
-     └───────────┘  └───────────┘  └─────┬─────┘
-                                         │
-                                         ▼
-                                   ┌───────────┐
-                                   │ Completed │ (Checkout checklist complete)
-                                   └───────────┘
+```mermaid
+stateDiagram-v2
+    [*] --> Scheduled: Materialized from RRULE / Calendar
+    Scheduled --> Active: Associate shift Clock-In
+    Scheduled --> Postponed: Management Oversight Deferral
+    Scheduled --> Cancelled: Operational Alert Cancellation
+    Active --> Completed: Checkout checklist complete & Clock-Out
+    Postponed --> Scheduled: Rescheduled on grid
+    Completed --> [*]
+    Cancelled --> [*]
 ```
 
 * **`EventScheduled`**: Workload mapped on schedule.
@@ -92,20 +87,27 @@ Event materializations follow standard Schema.org `EventStatusType` mapping, sup
 
 ## 4. Platform Architectural Integrations
 
-```
-┌──────────────────┐               ┌────────────────────┐
-│  Dynamic Alert   ├──────────────►│ TriggerStreaming() │
-│  (Till, Sensor)  │               └─────────┬──────────┘
-└──────────────────┘                         │ (Atomic Transaction)
-                                             ▼
-┌──────────────────┐               ┌────────────────────┐
-│  Scheduled Sweep ├──────────────►│ ProcessBatchEvent()│
-│  (Opening, SOP)  │               └─────────┬──────────┘
-└──────────────────┘                         │ (Atomic Transaction)
-                                             ▼
-                                   ┌────────────────────┐
-                                   │ GORM DB Persistence│
-                                   └────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Ingestion["Event Ingestion Layer"]
+        Alert["Dynamic Alert Stream<br/>(Till Drop, Spills, Call Bells)"]
+        Batch["Scheduled Batch Sweep<br/>(Store Open, Shift Checkouts)"]
+    end
+
+    subgraph Service["Processing Service Layer"]
+        StreamHandler["TriggerStreaming()<br/>• Priority Escalation<br/>• pgvector SOP Embedding Lookup"]
+        BatchHandler["ProcessBatchEvent()<br/>• Calendar RRULE Expansion<br/>• Template Matrix Mapping"]
+    end
+
+    subgraph Storage["Persistence & Queues"]
+        DB[("GORM Database Persistence<br/>• AlloyDB / PostgreSQL<br/>• task_executions Table")]
+    end
+
+    Alert -->|"Real-Time JSON Stream"| StreamHandler
+    Batch -->|"Cron Trigger"| BatchHandler
+
+    StreamHandler -->|"Atomic Transaction"| DB
+    BatchHandler -->|"Atomic Transaction"| DB
 ```
 
 1. **Automation Pipeline ([automation.go](../../pkg/service/automation.go))**: Coordinates batch materializations and dynamic alert priority overrides:
@@ -168,6 +170,6 @@ Validates distributed leader leases, locking state transfers, concurrency safety
 ### G. Executing Sandboxed Tests
 Verify and execute the tests using the hermetic Bazel sandbox target:
 ```bash
-bazel test //pkg/...
+bazel test //test/...
 ```
 All targets build, analyze, and test pass with 100% success.

@@ -52,3 +52,6 @@ app/build/
 .terraform.lock.hcl
 *.log
 tf.log
+
+.env.*.toml
+.envrc 

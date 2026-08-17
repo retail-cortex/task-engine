@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "persistence",
@@ -35,5 +35,18 @@ go_library(
         "@com_google_cloud_go_alloydbconn//:alloydbconn",
         "@io_gorm_driver_postgres//:postgres",
         "@io_gorm_gorm//:gorm",
+    ],
+)
+
+go_test(
+    name = "persistence_test",
+    srcs = ["persistence_test.go"],
+    embed = [":persistence"],
+    deps = [
+        "//pkg/model",
+        "@com_github_stretchr_testify//assert",
+        "@io_gorm_gorm//:gorm",
+        "@io_gorm_gorm//clause",
+        "@io_gorm_gorm//schema",
     ],
 )

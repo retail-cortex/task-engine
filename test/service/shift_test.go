@@ -28,7 +28,9 @@ import (
 // MockUserRepository implements persistence.UserRepository for testing.
 type MockUserRepository struct {
 	persistence.UserRepository
-	FindByIDFunc func(ctx context.Context, id string) (*model.User, error)
+	FindByIDFunc               func(ctx context.Context, id string) (*model.User, error)
+	ListFunc                   func(ctx context.Context) ([]*model.User, error)
+	ListActiveOnShiftUsersFunc func(ctx context.Context, siteID string) ([]*model.User, error)
 }
 
 func (m *MockUserRepository) FindByID(ctx context.Context, id string) (*model.User, error) {
@@ -38,11 +40,26 @@ func (m *MockUserRepository) FindByID(ctx context.Context, id string) (*model.Us
 	return nil, errors.New("not implemented")
 }
 
+func (m *MockUserRepository) List(ctx context.Context) ([]*model.User, error) {
+	if m.ListFunc != nil {
+		return m.ListFunc(ctx)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *MockUserRepository) ListActiveOnShiftUsers(ctx context.Context, siteID string) ([]*model.User, error) {
+	if m.ListActiveOnShiftUsersFunc != nil {
+		return m.ListActiveOnShiftUsersFunc(ctx, siteID)
+	}
+	return nil, errors.New("not implemented")
+}
+
 // MockShiftAgentSessionRepository implements persistence.ShiftAgentSessionRepository for testing.
 type MockShiftAgentSessionRepository struct {
 	persistence.ShiftAgentSessionRepository
 	FindByShiftFunc func(ctx context.Context, assigneeID, shiftInstanceID string) (*model.ShiftAgentSession, error)
 	CreateFunc      func(ctx context.Context, s *model.ShiftAgentSession) error
+	UpdateFunc      func(ctx context.Context, s *model.ShiftAgentSession) error
 	FindByIDFunc    func(ctx context.Context, id string) (*model.ShiftAgentSession, error)
 	ListFunc        func(ctx context.Context) ([]*model.ShiftAgentSession, error)
 	ListRangeFunc   func(ctx context.Context, offset, limit int) ([]*model.ShiftAgentSession, error)
@@ -59,6 +76,13 @@ func (m *MockShiftAgentSessionRepository) FindByShift(ctx context.Context, assig
 func (m *MockShiftAgentSessionRepository) Create(ctx context.Context, s *model.ShiftAgentSession) error {
 	if m.CreateFunc != nil {
 		return m.CreateFunc(ctx, s)
+	}
+	return nil
+}
+
+func (m *MockShiftAgentSessionRepository) Update(ctx context.Context, s *model.ShiftAgentSession) error {
+	if m.UpdateFunc != nil {
+		return m.UpdateFunc(ctx, s)
 	}
 	return nil
 }
@@ -268,5 +292,47 @@ func TestShiftService_SessionCRUD(t *testing.T) {
 		err := svc.DeleteSession(context.Background(), "session-1")
 		assert.NoError(t, err)
 		assert.True(t, called)
+	})
+
+	t.Run("UpdateSession success", func(t *testing.T) {
+		called := false
+		mockSessionRepo := &MockShiftAgentSessionRepository{
+			UpdateFunc: func(ctx context.Context, s *model.ShiftAgentSession) error {
+				assert.Equal(t, "session-1", s.ID)
+				called = true
+				return nil
+			},
+		}
+		svc := service.NewShiftService(mockSessionRepo, nil)
+		err := svc.UpdateSession(context.Background(), &model.ShiftAgentSession{ID: "session-1"})
+		assert.NoError(t, err)
+		assert.True(t, called)
+	})
+
+	t.Run("ListActiveUsers success", func(t *testing.T) {
+		expected := []*model.User{{ID: "u1"}}
+		mockUserRepo := &MockUserRepository{
+			ListFunc: func(ctx context.Context) ([]*model.User, error) {
+				return expected, nil
+			},
+		}
+		svc := service.NewShiftService(nil, mockUserRepo)
+		res, err := svc.ListActiveUsers(context.Background())
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+	})
+
+	t.Run("ListActiveOnShiftUsers success", func(t *testing.T) {
+		expected := []*model.User{{ID: "u1"}}
+		mockUserRepo := &MockUserRepository{
+			ListActiveOnShiftUsersFunc: func(ctx context.Context, siteID string) ([]*model.User, error) {
+				assert.Equal(t, "s1", siteID)
+				return expected, nil
+			},
+		}
+		svc := service.NewShiftService(nil, mockUserRepo)
+		res, err := svc.ListActiveOnShiftUsers(context.Background(), "s1")
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
 	})
 }

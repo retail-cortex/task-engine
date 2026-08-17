@@ -19,6 +19,7 @@ go_test(
     size = "small",
     srcs = [
         "event_test.go",
+        "hooks_test.go",
         "seed_test.go",
         "types_test.go",
         "user_test.go",
@@ -30,6 +31,9 @@ go_test(
     deps = [
         "//pkg/model",
         "@com_github_stretchr_testify//assert",
+        "@io_gorm_gorm//:gorm",
+        "@io_gorm_gorm//clause",
+        "@io_gorm_gorm//schema",
     ],
 )
 
@@ -37,6 +41,7 @@ go_test(
     name = "model_test",
     srcs = [
         "event_test.go",
+        "hooks_test.go",
         "seed_test.go",
         "types_test.go",
         "user_test.go",
@@ -48,5 +53,8 @@ go_test(
     deps = [
         "//pkg/model",
         "@com_github_stretchr_testify//assert",
+        "@io_gorm_gorm//:gorm",
+        "@io_gorm_gorm//clause",
+        "@io_gorm_gorm//schema",
     ],
 )

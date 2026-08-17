@@ -53,6 +53,32 @@ func TestJSONB_ScanAndValue(t *testing.T) {
 	})
 }
 
+func TestJSONB_MarshalUnmarshalJSON(t *testing.T) {
+	t.Run("nil JSONB marshal/unmarshal", func(t *testing.T) {
+		var j model.JSONB
+		m, err := j.MarshalJSON()
+		assert.NoError(t, err)
+		assert.Equal(t, []byte("null"), m)
+
+		var j2 model.JSONB
+		err = j2.UnmarshalJSON(nil)
+		assert.NoError(t, err)
+		assert.Nil(t, j2)
+	})
+
+	t.Run("valid JSONB marshal/unmarshal", func(t *testing.T) {
+		j := model.JSONB(`{"foo":"bar"}`)
+		m, err := j.MarshalJSON()
+		assert.NoError(t, err)
+		assert.Equal(t, []byte(`{"foo":"bar"}`), m)
+
+		var j2 model.JSONB
+		err = j2.UnmarshalJSON(m)
+		assert.NoError(t, err)
+		assert.Equal(t, j, j2)
+	})
+}
+
 func TestFloat32Vector_ScanAndValue(t *testing.T) {
 	tests := []struct {
 		name          string

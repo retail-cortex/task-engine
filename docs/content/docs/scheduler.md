@@ -14,26 +14,19 @@ This manual outlines the architectural intent, concurrency-safe designs, and exe
 
 The background scheduler coordinates scheduled **BATCH** sweeps (materializing workforce shifts and checklist event allocations) and parallel **ADHOC** process queues (indexing RAG documents, extracting text chunks, and embedding vectors).
 
-```
-               ┌───────────────────────────────┐
-               │    Distributed Server Nodes   │
-               │   (Cloud Run / GKE replicas)  │
-               └──────────────┬────────────────┘
-                              │ (Leader Lease Bid: pg_try_advisory_lock(5555))
-                              ▼
-               ┌───────────────────────────────┐
-               │     GORM Database Cluster     │ (State Manager & Lock Voter)
-               │      (AlloyDB / Postgres)     │
-               └──────────────┬────────────────┘
-                              │
-            ┌─────────────────┴─────────────────┐
-            ▼ (Acquires Lock)                   ▼ (Fails Lock / Blocks)
- ┌─────────────────────┐             ┌─────────────────────┐
- │   Active LEADER     │             │    Active WORKER    │
- └──────────┬──────────┘             └──────────┬──────────┘
-            ├─► Cron Sweeps                     ├─► Task Claims
-            ├─► SOP Update Audits               │   (FOR UPDATE SKIP LOCKED)
-            └─► Lock Watchdogs                  └─► RAG Indexings
+```mermaid
+flowchart TD
+    Nodes["Distributed Server Nodes<br/>(Cloud Run / GKE Replicas)"]
+    DB[("GORM Database Cluster<br/>(AlloyDB / PostgreSQL)<br/>State Manager & Lock Voter")]
+
+    subgraph Election["Election Decision via pg_try_advisory_lock(5555)"]
+        Leader["Active LEADER Node<br/>• Cron Calendar Sweeps<br/>• SOP Update Audits<br/>• Watchdog Lock Recovery"]
+        Worker["Active WORKER Nodes<br/>• Parallel Task Claims (SKIP LOCKED)<br/>• RAG Indexing Execution"]
+    end
+
+    Nodes -->|"Advisory Lock Bid on Key 5555"| DB
+    DB -->|"Acquires Lock (Pinned sql.Conn Socket)"| Leader
+    DB -->|"Fails Lock / Blocks"| Worker
 ```
 
 The system is designed for horizontal scaling across dozens of microservice replicas. It leverages the underlying PostgreSQL database cluster as the single source of truth for leader status, lock leases, and job state coordination:
@@ -74,7 +67,7 @@ Nodes check the leader lock status periodically (every `15s` by default, configu
 
 ---
 
-### B. Parallel SKIP LOCKED Concurrent Workers
+## 3. Parallel SKIP LOCKED Concurrent Workers
 Multiple worker nodes concurrently claim and process pending task executions and SOP indexing process records without double-claiming.
 
 #### 1. Concurrency-Safe claims
@@ -105,7 +98,7 @@ Once the transaction commits, row locks release but the logical lock (flagged vi
 
 ---
 
-### C. Lock Timeout Recovery & Dead Letter Watchdog
+## 4. Lock Timeout Recovery & Dead Letter Watchdog
 The watchdog recovery routine runs periodically (every `30s` by default, Leader node only, configurable) to automatically self-heal stalled or crashed worker pipelines.
 
 #### 1. Timeout Auditing
@@ -133,24 +126,24 @@ For each stalled SOP process run detected, it is similarly reverted back to `PEN
 
 ---
 
-### D. SOP Metadata Verification & Ingestion Sweeper
+## 5. SOP Metadata Verification & Ingestion Sweeper
 The leader node monitors active Standard Operating Procedure (SOP) targets periodically (every `60s` by default, configurable) to detect external document updates and refresh embedding pools dynamically.
 
-```
-┌────────────────────┐
-│ SOP check loop     ├───────► HEAD Request
-└────────────────────┘             │
-                                   ├──► HTML: ETag/Last-Modified check
-                                   └──► Binary: Content-Length/SHA hash check
-                                           │
-                                           ▼ (Drift Detected)
-                                ┌────────────────────┐
-                                │ Mark process dead  │ (IsActive = false)
-                                └──────────┬─────────┘
-                                           ▼
-                                ┌────────────────────┐
-                                │ Seed PENDING Run   ├─► Enqueues to parallel
-                                └────────────────────┘   workers claim loop
+```mermaid
+flowchart TD
+    CheckLoop["SOP Periodic Check Loop (Every 60s)"]
+    HeadReq["HTTP HEAD Request<br/>• HTML: ETag / Last-Modified Header<br/>• Binary: Content-Length / SHA-256 Checksum"]
+    Drift{"Drift Detected?"}
+    Deactivate["Mark Old SOPProcess Inactive<br/>(IsActive = false)"]
+    Seed["Seed New PENDING SOPProcess Run"]
+    Enqueue["Enqueue to Parallel Workers Claim Loop<br/>(Parse -> Vector Embed -> AlloyDB pgvector Chunks)"]
+
+    CheckLoop --> HeadReq
+    HeadReq --> Drift
+    Drift -->|"Yes (ETag or SHA-256 Changed)"| Deactivate
+    Drift -->|"No"| CheckLoop
+    Deactivate --> Seed
+    Seed --> Enqueue
 ```
 
 * **HTML Caching Audit:** Emits HTTP `HEAD` checks. Compares the returned HTTP `ETag` or `Last-Modified` headers against the values saved inside the `SOP.Metadata` JSONB column.
@@ -162,7 +155,7 @@ The leader node monitors active Standard Operating Procedure (SOP) targets perio
 
 ---
 
-## 3. Administrative REST Controller Interface
+## 6. Administrative REST Controller Interface
 
 The scheduler exposes JSON controllers mapped under [admin.go](../../pkg/api/admin.go) to provide cluster observability and direct manual controls:
 
@@ -178,7 +171,7 @@ The scheduler exposes JSON controllers mapped under [admin.go](../../pkg/api/adm
     "tasks_completed": 140,
     "tasks_failed": 2,
     "last_leader_election": "2026-05-22T10:08:00Z",
-    "last_error": "advisory lock query failed..." // Present only on active errors
+    "last_error": "advisory lock query failed..."
   }
   ```
 
@@ -188,7 +181,7 @@ The scheduler exposes JSON controllers mapped under [admin.go](../../pkg/api/adm
 
 ---
 
-## 4. Verification & Testing Mappings
+## 7. Verification & Testing Mappings
 
 Comprehensive testing configurations are registered inside [scheduler_test.go](../../pkg/service/scheduler_test.go) and [server_test.go](../../pkg/api/server_test.go):
 

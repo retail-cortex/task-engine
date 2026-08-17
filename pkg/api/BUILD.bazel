@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_go//go:def.bzl", "go_library")
+load("@rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "api",
@@ -51,5 +51,27 @@ go_library(
         "@org_golang_google_api//idtoken",
         "@org_golang_x_oauth2//:oauth2",
         "@org_golang_x_oauth2//google",
+    ],
+)
+
+go_test(
+    name = "api_test",
+    srcs = [
+        "a2ui_test.go",
+        "admin_test.go",
+        "dto_test.go",
+        "mcp_test.go",
+        "operational_test.go",
+        "rest_extra_test.go",
+    ],
+    embed = [":api"],
+    deps = [
+        "//pkg/model",
+        "//pkg/service",
+        "@com_github_gin_gonic_gin//:gin",
+        "@com_github_stretchr_testify//assert",
+        "@io_gorm_gorm//:gorm",
+        "@io_gorm_gorm//clause",
+        "@io_gorm_gorm//schema",
     ],
 )

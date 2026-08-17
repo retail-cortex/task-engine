@@ -6,91 +6,68 @@ bookFlatSection: true
 
 # Enterprise Task Engine
 
-An enterprise-grade, multi-regional Task Orchestration Engine built on Go, React, and Bazel 8, powered by Google's Model Context Protocol (MCP) and Gemini AI.
+An enterprise-grade, multi-regional Task Orchestration Engine built on Go, React, Python ADK, and Android Jetpack Compose, built with Bazel 8 and powered by Google's Model Context Protocol (MCP), Gemini AI, on-device Gemma, and Agentic User Interfaces (A2UI).
 
 ---
 
-## Project Overview
+## Master Specifications Index
 
-The **Enterprise Task Engine** orchestrates operational retail and task workflows, combining static rule-based scheduling with dynamic AI agent execution.
-
-* **Administrative MDM & Schema CRUD:** Fully managed entities including Users, Roles, Locations, Task Templates, Certifications, and SOPs.
-* **AI-Assisted Task Execution:** Real-time query resolution via vector search against localized SOP context windows (`pgvector` on AlloyDB).
-* **Human-in-the-Loop Compliance:** Explicit override mechanisms that trigger transactional audit ledgers using custom GORM Hooks.
-* **Model Context Protocol (MCP):** Fully loaded agent definitions loaded from the `/pkg/agents` module, exposed hermetically over JSON-RPC.
-
-For a deep dive into technical boundaries, database schemas, and spatial mapping domains, read the **[Architectural Design Document](docs/architecture.md)**, **[Event-Driven Operations Specification](docs/events.md)**, and the **[Background Job Scheduler Daemon Guide](docs/scheduler.md)**.
+| Specification Manual | Operational Domain | Key Technical Focus |
+| :--- | :--- | :--- |
+| **[Architectural Design Document]({{< ref "architecture.md" >}})** | Core Architecture | Multi-tier topology, Gin API Gateway, AlloyDB, pgvector HNSW, Otel |
+| **[App & UI Workflows]({{< ref "apps_and_ui.md" >}})** | Client Ecosystem | React Admin Console, GTasks Native Android, Dual-Engine LLM |
+| **[A2UI Architecture & Engine]({{< ref "a2ui_architecture.md" >}})** | Dynamic UI Tier | A2UI v0.8 contracts, MCP tools, React & Compose rendering engines |
+| **[Voice & Speech Intelligence]({{< ref "voice_and_translation.md" >}})** | Speech Intelligence | Cloud STT, Neural Translation, TTS HD voices, Chirp 3 Voice Cloning |
+| **[Event-Driven Mechanics]({{< ref "events.md" >}})** | Event Ingestion | ARTS XML / Schema.org taxonomies, BATCH vs ADHOC alert triggers |
+| **[Distributed Scheduler Daemon]({{< ref "scheduler.md" >}})** | Concurrency & Queue | Postgres advisory locks (`key: 5555`), `SKIP LOCKED`, dead-letter watchdog |
+| **[Workspace Directory & Stores]({{< ref "store_information.md" >}})** | Identity & Hierarchy | Google Workspace OU structure, 109 storefronts, 553 test profiles |
+| **[Google Cloud & OAuth Setup]({{< ref "cloud_setup.md" >}})** | Infrastructure Setup | GCP project provisioning, OAuth 2.0 consent screens, Client IDs |
+| **[Android Handset App Guide]({{< ref "android_setup.md" >}})** | Mobile Deployment | Android Studio setup, ADB reverse port forwarding, APK installs |
+| **[A2UI Development Lessons]({{< ref "a2ui_lessons.md" >}})** | UI Integration Notes | Typographic schemas, column stretching, rate-limit mitigation |
+| **[Governance & Licensing]({{< ref "governance_and_licensing.md" >}})** | Governance & Decisions | Apache 2.0 terms, authors, design decisions, failure domain nuances |
 
 ---
 
 ## Repository Architecture & Directory Layout
 
-The workspace follows the standard Go project layout (`/cmd`, `/internal`, `/pkg`, `/api`) combined with Bazel 8 rules to build both backend services and React client interfaces.
-
 | Directory | Description |
 | :--- | :--- |
-| [`/cmd/server/main.go`](../../cmd/server/main.go) | Entry point for the Gin API Server and JSON-RPC MCP listeners. |
-| [`/pkg/persistence`](../../pkg/persistence) | GORM configuration, GCS connectivity, pgvector client hooks, and transactional DB instances. |
-| [`/pkg/model`](../../pkg/model) | Core domain entities and schemas mapped via GORM tags. |
-| [`/pkg/api`](../../pkg/api) | Gin web router, custom JWT authentication validation middlewares, and route registration. |
-| [`/pkg/service`](../../pkg/service) | Clean, isolated service layers encapsulating operational task flows and peer-to-peer handshakes. |
-| [`/pkg/agents`](../../pkg/agents) | Gemini Model Context Protocol (MCP) agent tool implementations. |
-| [`/web/console`](../../web/console) | React-based Admin Operations Dashboard built using pnpm, Vite, and TypeScript. |
+| [`/cmd/server`](../../cmd/server) | Entry point for the Go Gin API Server and JSON-RPC MCP listeners. |
+| [`/cmd/task_agent`](../../cmd/task_agent) | Python FastAPI ADK Agent service with A2UI transpiler and SVG blueprint engine. |
+| [`/cmd/db_loader`](../../cmd/db_loader) | Automated database schema migrator and relational seed data loader. |
+| [`/cmd/db_diagnose`](../../cmd/db_diagnose) | Command-line diagnostic and connectivity validation utility. |
+| [`/pkg/persistence`](../../pkg/persistence) | GORM configuration, pgvector client hooks, repositories, and transactional DB pools. |
+| [`/pkg/model`](../../pkg/model) | Core domain entities, GORM tags, event types, and audit schema models. |
+| [`/pkg/api`](../../pkg/api) | Gin web router, OAuth/IAP middlewares, MCP handlers, and route controllers. |
+| [`/pkg/service`](../../pkg/service) | Business logic for task execution, RAG SOP vector indexing, scheduling, and translation. |
+| [`/web/console`](../../web/console) | React 19 Admin & Operations Console built with Vite, TypeScript, and Tailwind CSS. |
+| [`/web/agentic`](../../web/agentic) | Standalone speech-enabled Agentic UI cockpit with interactive digital twin map. |
 | [`/web/render-test`](../../web/render-test) | React-based rendering validation workbench. |
-| [`/docs`](../../docs) | Core documentation site root (Hugo configurations & targets). |
+| [`/apps/gtasks`](../../apps/gtasks) | Native Android associate handset portal app (Kotlin / Jetpack Compose M3). |
+| [`/docs`](../../docs) | Hugo documentation site root (Hugo configurations & Bazel rules). |
 
 ---
 
-## Build & Development Workflows
+## Quickstart Commands
 
-The entire repository is driven via **Bazel 8** for fast, hermetic builds.
-
-### 1. Local Monorepo Setup
-Initialize and resolve all Bazel modules and Node dependencies:
 ```bash
-bazel mod tidy
-```
-
-### 2. Starting the Concurrent Development Environment
-To start both frontend applications and the Go backend API server simultaneously in a parallel dev session, run the `dev_server` target:
-```bash
+# Start backend API server and MCP listener
 bazel run //:dev_server
-```
-* **Go API Backend:** Binds to `:8080`
-* **Admin Console SPA:** Binds to `:5173`
-* **Render Test Workbench:** Binds to `:5174` (dynamically negotiated)
 
-### 3. Serving the Documentation Site
-To build and spin up the local Hugo server with live hot-reloading for this documentation site, run:
-```bash
+# Start Hugo documentation portal locally at http://localhost:1313
 bazel run //docs:serve
-```
-* **Documentation Server:** Serves at `http://localhost:1313/`
 
-### 4. Independent Component Builds & Tests
+# Generate unified single-page markdown bundle & llms-full.txt
+bazel run //docs:generate_single_page
+# or build hermetically into bazel-bin/docs/
+bazel build //docs:bundle
 
-#### Build & Test the Backend Server
-```bash
-# Build server binary
-bazel build //cmd:server
+# Execute full backend test suites hermetically
+bazel test //test/...
 
-# Run server tests
-bazel test //pkg/...
-```
-
-#### Build React Frontend Applications
-```bash
-# Build the Admin Console
+# Build React Admin Console
 bazel build //web/console:build
 
-# Build the Render Test Workbench
-bazel build //web/render-test:build
+# Build GTasks Android APK
+bazel build //apps/gtasks:build
 ```
-
----
-
-## Technical & Styling Guidelines
-
-* **Go Development:** Private business logic is strictly kept under `/internal` or private submodules. Multi-stage containerization packages Go binaries inside secure distroless containers.
-* **TypeScript/React Styling:** Functional arrow syntax components wrap Material 3 `ThemeProvider` definitions. Tailwind CSS is reserved for localized layouts.
-* **Python Tooling:** Any external automation or helper scripts must be executed exclusively via `uv` under the designated python environment.

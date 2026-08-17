@@ -1,3 +1,17 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import re
 import json
 import uuid
@@ -650,6 +664,21 @@ def normalize_card_to_a2ui_messages(flat_card: Dict[str, Any], surface_id: str =
             }
             return comp_id
 
+        elif node_type in ["webframe", "webframesrcdoc"]:
+            comp_id = next_id("webframe")
+            html_val = node.get("htmlContent", node.get("html_content", ""))
+            properties = {
+                "htmlContent": {"literalString": str(html_val)},
+                "height": int(node.get("height", 300))
+            }
+            components[comp_id] = {
+                "id": comp_id,
+                "component": {
+                    "WebFrameSrcdoc": properties
+                }
+            }
+            return comp_id
+
         return None
 
     root_id = process_node(flat_card)
@@ -709,9 +738,83 @@ def custom_convert_a2a_part_to_genai_part(a2a_part: a2a_types.Part) -> Optional[
     # Fallback to the original ADK part converter
     return original_convert_a2a_part_to_genai_part(a2a_part)
 import google.adk.a2a.converters.event_converter as ec
+import contextvars
+
+# Context-local memory for pending native suggestion chips to be attached to the final message
+PENDING_SUGGESTIONS = contextvars.ContextVar("pending_suggestions", default=[])
+
+def set_pending_suggestions(suggestions: list[str] | None) -> None:
+    try:
+        PENDING_SUGGESTIONS.set([s for s in (suggestions or []) if s])
+    except Exception:
+        pass
+
+def get_pending_suggestions() -> list[str]:
+    try:
+        return list(PENDING_SUGGESTIONS.get([]) or [])
+    except Exception:
+        return []
 
 # Global memory cache for pre-synthesized Go-native A2UI Cards to prevent LLM text corruption
 CACHED_A2UI_CARDS = {}
+
+
+def fetch_task_portal_card_on_the_fly(user_id: str) -> Optional[str]:
+    import os
+    mcp_url = os.environ.get("MCP_SERVER_URL", "http://127.0.0.1:8080/api/v1/mcp")
+    print(f"[Self-Healing] Cache miss for [A2UI_CARD_TASK_PORTAL_CACHED]. Fetching on-the-fly...")
+    try:
+        from agents.task_agent.task_agent import assemble_unified_portal_card
+        portal_card_json = assemble_unified_portal_card(
+            user_id=user_id,
+            mcp_url=mcp_url,
+            active_site_id=None,
+            active_execution_id=None
+        )
+        import builtins
+        cached_cards = getattr(builtins, "CACHED_A2UI_CARDS", {})
+        cached_cards["[A2UI_CARD_TASK_PORTAL_CACHED]"] = portal_card_json
+        print(f"[Self-Healing] Successfully fetched and populated cache for [A2UI_CARD_TASK_PORTAL_CACHED].")
+        return portal_card_json
+    except Exception as e:
+        print(f"[Self-Healing Error] Failed fetching task portal on-the-fly: {e}")
+    return None
+
+
+def fetch_store_selector_card_on_the_fly() -> Optional[str]:
+    import os
+    import httpx
+    mcp_url = os.environ.get("MCP_SERVER_URL", "http://127.0.0.1:8080/api/v1/mcp")
+    print(f"[Self-Healing] Cache miss for [A2UI_CARD_STORE_SELECTOR_CACHED]. Fetching on-the-fly from Go MCP server at {mcp_url}...")
+    try:
+        with httpx.Client() as client:
+            resp = client.post(
+                mcp_url,
+                json={
+                    "jsonrpc": "2.0",
+                    "method": "tools/call",
+                    "params": {
+                        "name": "get_store_selector",
+                        "arguments": {}
+                    },
+                    "id": 1
+                },
+                timeout=5.0
+            )
+            resp.raise_for_status()
+            result = resp.json().get("result", {})
+            content_list = result.get("content", [])
+            if content_list:
+                content_text = content_list[0].get("text", "")
+                if content_text:
+                    import builtins
+                    cached_cards = getattr(builtins, "CACHED_A2UI_CARDS", {})
+                    cached_cards["[A2UI_CARD_STORE_SELECTOR_CACHED]"] = content_text
+                    print(f"[Self-Healing] Successfully fetched and populated cache for [A2UI_CARD_STORE_SELECTOR_CACHED]. Length: {len(content_text)}")
+                    return content_text
+    except Exception as e:
+        print(f"[Self-Healing Error] Failed fetching store selector on-the-fly: {e}")
+    return None
 
 
 def custom_convert_event_to_a2a_message(
@@ -738,6 +841,7 @@ def custom_convert_event_to_a2a_message(
                 
                 # Check for cached card token to bypass LLM parsing
                 cache_tokens = [
+                    "[A2UI_CARD_TASK_PORTAL_CACHED]",
                     "[A2UI_CARD_TASK_LIST_CACHED]",
                     "[A2UI_CARD_LOCATIONS_CACHED]",
                     "[A2UI_CARD_TASK_DETAILS_CACHED]",
@@ -750,6 +854,24 @@ def custom_convert_event_to_a2a_message(
                     token = next(t for t in cache_tokens if t in text)
                     cached_cards = getattr(builtins, "CACHED_A2UI_CARDS", {})
                     json_str = cached_cards.get(token)
+                    if not json_str:
+                        if token == "[A2UI_CARD_TASK_PORTAL_CACHED]":
+                            # Resolve user ID from invocation context
+                            from shared_context import active_user_id_var, session_user_map
+                            user_id = active_user_id_var.get()
+                            if not user_id and invocation_context:
+                                user_email = getattr(invocation_context, "user_email", "")
+                                if user_email:
+                                    user_id = user_email
+                                else:
+                                    session_id = getattr(invocation_context, "user_id", "")
+                                    clean_session_id = session_id.removeprefix("A2A_USER_")
+                                    user_id = session_user_map.get(clean_session_id, session_id)
+                            if not user_id:
+                                user_id = "00000000-0000-0000-0000-000000000000"
+                            json_str = fetch_task_portal_card_on_the_fly(user_id)
+                        elif token == "[A2UI_CARD_STORE_SELECTOR_CACHED]":
+                            json_str = fetch_store_selector_card_on_the_fly()
                     if json_str:
                         print(f"[A2UI Monkeypatch] Found cached card token {token}. Retrieving cached JSON card from builtins.CACHED_A2UI_CARDS...")
                         
@@ -829,6 +951,24 @@ def custom_convert_event_to_a2a_message(
                 if a2a_part:
                     a2a_parts.append(a2a_part)
                     
+        # Attach any pending native suggestion chips at the end of the parts list
+        suggestions = get_pending_suggestions()
+        if suggestions:
+            print(f"[A2UI Monkeypatch] Attaching {len(suggestions)} native suggestion chips to the final message: {suggestions}")
+            sugg_part = a2a_types.Part(
+                root=a2a_types.DataPart(
+                    data={
+                        "recommendQuestionsResponse": {
+                            "questions": suggestions
+                        }
+                    },
+                    metadata={"mimeType": "application/json+suggestions"}
+                )
+            )
+            a2a_parts.append(sugg_part)
+            # Clear them so they don't leak to subsequent turns
+            set_pending_suggestions([])
+
         if a2a_parts:
             return a2a_types.Message(message_id=str(uuid.uuid4()), role=role, parts=a2a_parts)
             

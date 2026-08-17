@@ -22,18 +22,18 @@
   --font-mono: 'JetBrains Mono', monospace;
 
   /* --- COREUI DARK THEME SIGNATURE VARIABLES --- */
-  --bg-main: #0c0e17;
-  --bg-gradient: radial-gradient(circle at 50% 0%, #151932 0%, #0c0e17 100%);
-  --panel-glass: rgba(22, 26, 47, 0.65);
-  --panel-border: rgba(99, 102, 241, 0.15);
-  --panel-border-hover: rgba(99, 102, 241, 0.35);
+  --bg-main: #041f41;
+  --bg-gradient: radial-gradient(circle at 50% 0%, #092e5c 0%, #041f41 100%);
+  --panel-glass: rgba(9, 46, 92, 0.65);
+  --panel-border: rgba(0, 113, 206, 0.15);
+  --panel-border-hover: rgba(0, 113, 206, 0.35);
   
   --text-primary: #f8fafc;
   --text-secondary: #cbd5e1;
   --text-muted: #64748b;
 
-  --accent-primary: #6366f1;
-  --accent-primary-glow: rgba(99, 102, 241, 0.25);
+  --accent-primary: #0071ce;
+  --accent-primary-glow: rgba(0, 113, 206, 0.25);
   
   /* Backward compatibility shortcuts */
   --neon-primary: var(--accent-primary);
@@ -47,36 +47,36 @@
   --priority-standard: #34d399;
   --priority-standard-glow: rgba(52, 211, 153, 0.15);
 
-  --scrollbar-thumb: rgba(99, 102, 241, 0.45);
-  --scrollbar-thumb-hover: rgba(99, 102, 241, 0.75);
+  --scrollbar-thumb: rgba(0, 113, 206, 0.45);
+  --scrollbar-thumb-hover: rgba(0, 113, 206, 0.75);
 
-  --blueprint-bg: #0b0d19;
-  --blueprint-fixture-fill: rgba(99, 102, 241, 0.04);
-  --blueprint-fixture-stroke: rgba(99, 102, 241, 0.18);
+  --blueprint-bg: #031730;
+  --blueprint-fixture-fill: rgba(0, 113, 206, 0.04);
+  --blueprint-fixture-stroke: rgba(0, 113, 206, 0.18);
   --blueprint-grid-stroke: rgba(255, 255, 255, 0.03);
   --blueprint-text-primary: rgba(255, 255, 255, 0.15);
   --blueprint-text-secondary: rgba(255, 255, 255, 0.12);
   --blueprint-text-muted: rgba(255, 255, 255, 0.08);
 
-  --input-bg: #090b11;
+  --input-bg: #031022;
   --bubble-agent-bg: rgba(255, 255, 255, 0.03);
   --task-item-bg: rgba(255, 255, 255, 0.015);
-  --task-item-hover-bg: rgba(99, 102, 241, 0.06);
+  --task-item-hover-bg: rgba(0, 113, 206, 0.06);
   --task-item-border: rgba(255, 255, 255, 0.04);
 
   --card-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
-  --card-shadow-hover: 0 8px 32px 0 rgba(99, 102, 241, 0.08);
+  --card-shadow-hover: 0 8px 32px 0 rgba(0, 113, 206, 0.08);
   --indicator-glow: 0 0 12px var(--accent-primary-glow);
-  --a2ui-gradient: linear-gradient(135deg, rgba(21, 25, 50, 0.9) 0%, rgba(12, 14, 23, 0.98) 100%);
-  --a2ui-shadow: 0 4px 25px rgba(99, 102, 241, 0.1);
-  --a2ui-header-border: rgba(181, 95, 230, 0.25);
+  --a2ui-gradient: linear-gradient(135deg, rgba(9, 46, 92, 0.9) 0%, rgba(4, 31, 65, 0.98) 100%);
+  --a2ui-shadow: 0 4px 25px rgba(0, 113, 206, 0.1);
+  --a2ui-header-border: rgba(235, 20, 141, 0.25);
   --a2ui-btn-hover-text: #000000;
   
-  --brand-title-gradient: linear-gradient(135deg, #ffffff 0%, #6366f1 100%);
+  --brand-title-gradient: linear-gradient(135deg, #ffffff 0%, #0071ce 100%);
   --meta-pill-bg: rgba(255, 255, 255, 0.05);
   --meta-pill-border: rgba(255, 255, 255, 0.1);
   
-  --compliance-card-bg: linear-gradient(135deg, rgba(52, 211, 153, 0.05) 0%, rgba(12, 14, 23, 0.4) 100%);
+  --compliance-card-bg: linear-gradient(135deg, rgba(52, 211, 153, 0.05) 0%, rgba(4, 31, 65, 0.4) 100%);
   --compliance-border: rgba(52, 211, 153, 0.25);
   
   --trade-row-bg: rgba(255, 255, 255, 0.02);
@@ -86,11 +86,11 @@
   --checklist-step-border: rgba(255, 255, 255, 0.03);
   --checklist-step-hover-bg: rgba(255, 255, 255, 0.035);
 
-  --chip-bg: rgba(99, 102, 241, 0.08);
-  --chip-border: rgba(99, 102, 241, 0.2);
-  --chip-hover-bg: rgba(99, 102, 241, 0.15);
+  --chip-bg: rgba(0, 113, 206, 0.08);
+  --chip-border: rgba(0, 113, 206, 0.2);
+  --chip-hover-bg: rgba(0, 113, 206, 0.15);
 
-  --btn-send-bg: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+  --btn-send-bg: linear-gradient(135deg, #0071ce 0%, #004c8c 100%);
 
   --hud-bg: rgba(12, 10, 24, 0.75);
   --hud-border: rgba(255, 255, 255, 0.08);

@@ -1,3 +1,17 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import sys
 from unittest import mock
 
@@ -400,7 +414,69 @@ def test_normalize_card_to_a2ui_messages_checkbox():
     assert checkbox["component"]["CheckBox"]["value"] == {"path": "/form/agreedToTerms"}
 
 
+def test_normalize_card_to_a2ui_messages_webframe():
+    card = {
+        "type": "card",
+        "title": "WEBFRAME TEST",
+        "children": [
+            {
+                "type": "webframe",
+                "htmlContent": "<html><body><h1>Hello World</h1></body></html>",
+                "height": 450
+            }
+        ]
+    }
+    
+    messages = normalize_card_to_a2ui_messages(card)
+    assert len(messages) == 2
+    components = messages[1]["surfaceUpdate"]["components"]
+    
+    webframe = next(c for c in components if "WebFrameSrcdoc" in c["component"])
+    assert webframe["component"]["WebFrameSrcdoc"]["htmlContent"] == {
+        "literalString": "<html><body><h1>Hello World</h1></body></html>"
+    }
+    assert webframe["component"]["WebFrameSrcdoc"]["height"] == 450
 
 
-
-
+def test_normalize_card_to_a2ui_messages_webframe_hybrid():
+    card = {
+        "type": "card",
+        "title": "HYBRID TEST",
+        "children": [
+            {
+                "type": "webframe",
+                "htmlContent": "<html><body><h1>Hello World</h1></body></html>",
+                "height": 450
+            },
+            {
+                "type": "button",
+                "label": "Start Step",
+                "action": "UPDATE_CHECKLIST",
+                "actionData": {
+                    "execution_id": "123",
+                    "status": "IN_PROGRESS"
+                }
+            }
+        ]
+    }
+    
+    messages = normalize_card_to_a2ui_messages(card)
+    assert len(messages) == 2
+    components = messages[1]["surfaceUpdate"]["components"]
+    
+    card_comp = next(c for c in components if "Card" in c["component"])
+    root_id = card_comp["component"]["Card"]["child"]
+    
+    column_comp = next(c for c in components if c["id"] == root_id)
+    assert "Column" in column_comp["component"]
+    children_list = column_comp["component"]["Column"]["children"]["explicitList"]
+    
+    # The children list should contain the title text, the WebFrame, and the button
+    assert len(children_list) == 3
+    
+    webframe = next(c for c in components if "WebFrameSrcdoc" in c["component"])
+    button = next(c for c in components if "Button" in c["component"])
+    
+    assert webframe["id"] in children_list
+    assert button["id"] in children_list
+    assert button["component"]["Button"]["label"] == "Start Step"

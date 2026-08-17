@@ -99,22 +99,25 @@ Locate the **SHA-1** fingerprint in the terminal output. It will look similar to
 
 ## 4. Environment Variable Configuration
 
-Once you have provisioned your credentials, you must expose them to the Go API gateway using your local configuration files.
+Once you have provisioned your credentials, configure your local environment by copying the example template:
 
-1. Locate the `.env.local.toml` file at the root of your workspace (create it if it does not exist).
-2. Add or update the `[auth.google]` block:
+```bash
+cp example.env.local.toml .env.local.toml
+```
+
+Update the `[server.oauth]` block in **`.env.local.toml`**:
 
 ```toml
-[auth]
-jwt_secret = "your-custom-secure-jwt-signing-key" # Define a secure token signing secret
-
-[auth.google]
+[server.oauth]
 client_id = "PASTE-YOUR-WEB-CLIENT-ID-HERE.apps.googleusercontent.com"
-client_secret = "PASTE-YOUR-WEB-CLIENT-SECRET-HERE"
+allowed_client_ids = [
+    "PASTE-YOUR-ANDROID-CLIENT-ID-HERE.apps.googleusercontent.com"
+]
+secret = "PASTE-YOUR-WEB-CLIENT-SECRET-HERE"
 ```
 
 > [!IMPORTANT]
-> Keep your `.env.local.toml` out of version control. The root `.gitignore` is pre-configured to exclude `.env.local.toml` to prevent leaking enterprise client secrets.
+> Keep your `.env.local.toml` out of version control. The root `.gitignore` excludes `.env.*.toml` to prevent leaking enterprise client secrets.
 
 ---
 
@@ -126,11 +129,11 @@ You can seed your developer account by editing your local `scripts/dev_events.sq
 ```sql
 INSERT INTO users (id, name, email, o_auth_provider, o_auth_id, created_at, updated_at) 
 VALUES (
-  'b75c1a02-c884-40ed-a3f8-8b95f3ff7539', -- Your User UUID
-  'Ryan McGuinness',                     -- Your Display Name
-  'ryan@rmcguinness.altostrat.com',      -- Your Google Sign-In Email
+  '00000000-0000-0000-0000-000000000001', -- Your User UUID
+  'Demo Associate',                      -- Your Display Name
+  'admin@retail.altostrat.com',          -- Your Google Sign-In Email
   'google',
-  '113329281712545510375',               -- Your Google User ID (optional, bound on first login)
+  '100000000000000000000',               -- Your Google User ID (optional, bound on first login)
   NOW(), NOW()
 ) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name;
 ```

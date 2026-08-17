@@ -265,4 +265,17 @@ func TestAutomationService_TriggerStreamingEvent(t *testing.T) {
 		assert.Nil(t, exec)
 		assert.Contains(t, err.Error(), "siteID, organizerID, and eventType are mandatory parameters")
 	})
+
+	t.Run("ListTemplates returns tasks", func(t *testing.T) {
+		expected := []*model.Task{{ID: "t1"}}
+		mockTaskRepo := &MockTaskRepository{
+			ListFunc: func(ctx context.Context) ([]*model.Task, error) {
+				return expected, nil
+			},
+		}
+		svc := service.NewAutomationService(nil, mockTaskRepo, nil, nil, nil, nil)
+		res, err := svc.ListTemplates(context.Background())
+		assert.NoError(t, err)
+		assert.Equal(t, expected, res)
+	})
 }

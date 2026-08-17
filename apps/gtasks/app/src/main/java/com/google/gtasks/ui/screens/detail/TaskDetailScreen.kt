@@ -1,3 +1,17 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package com.google.gtasks.ui.screens.detail
 
 import androidx.compose.foundation.BorderStroke
@@ -208,7 +222,7 @@ fun TaskDetailScreen(
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0x1FEF4444), // Translucent Red (Critical/Warning Glow)
+                            GTasksTheme.colors.colorCritical.copy(alpha = 0.12f),
                             GTasksTheme.colors.bgMain
                         ),
                         radius = 1000f
@@ -757,8 +771,8 @@ private fun ChecklistStepItem(
                         if (delta != null) {
                             val isCompliant = delta <= 0
                             val label = if (isCompliant) "SLO compliant: -${formatDuration(-delta)}" else "SLO bottleneck: +${formatDuration(delta)}"
-                            val badgeBg = if (isCompliant) Color(0x1F10B981) else Color(0x1FEF4444)
-                            val badgeText = if (isCompliant) Color(0xFF10B981) else Color(0xFFEF4444)
+                            val badgeBg = if (isCompliant) themeColors.colorAccent.copy(alpha = 0.12f) else themeColors.colorCritical.copy(alpha = 0.12f)
+                            val badgeText = if (isCompliant) themeColors.colorAccent else themeColors.colorCritical
                             
                             Box(
                                 modifier = Modifier

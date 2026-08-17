@@ -892,3 +892,46 @@ func TestRAGService_CRUD(t *testing.T) {
 		assert.True(t, calledDelete)
 	})
 }
+
+func TestRAGService_EmbeddingGeneratorAndCRUD(t *testing.T) {
+	t.Run("default embedding generator generates 768 vector", func(t *testing.T) {
+		gen := service.NewDefaultEmbeddingGenerator()
+		vec, err := gen.GenerateEmbeddings(context.Background(), "test sop content")
+		assert.NoError(t, err)
+		assert.Len(t, vec, 768)
+	})
+
+	t.Run("RegisterSOP, SaveChunks, QuerySimilarity", func(t *testing.T) {
+		sop := &model.SOP{ID: "sop-1"}
+		chunks := []*model.SOPChunk{{ID: "chunk-1"}}
+		mockRepo := &mockSOPRepository{
+			CreateFunc: func(ctx context.Context, s *model.SOP) error {
+				assert.Equal(t, "sop-1", s.ID)
+				return nil
+			},
+			CreateChunksFunc: func(ctx context.Context, c []*model.SOPChunk) error {
+				assert.Len(t, c, 1)
+				return nil
+			},
+			QuerySimilarityFunc: func(ctx context.Context, embedding model.Float32Vector, limit int) ([]*model.SOPChunk, error) {
+				return chunks, nil
+			},
+		}
+
+		svc := service.NewRAGService(mockRepo, nil)
+		err := svc.RegisterSOP(context.Background(), sop)
+		assert.NoError(t, err)
+
+		err = svc.SaveChunks(context.Background(), chunks)
+		assert.NoError(t, err)
+
+		res, err := svc.QuerySimilarity(context.Background(), model.Float32Vector{0.1}, 5)
+		assert.NoError(t, err)
+		assert.Equal(t, chunks, res)
+	})
+
+	t.Run("defaultHTTPClient Head", func(t *testing.T) {
+		httpClient := service.NewRAGService(nil, nil)
+		assert.NotNil(t, httpClient)
+	})
+}

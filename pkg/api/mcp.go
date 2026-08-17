@@ -248,7 +248,38 @@ type GetTasksArgs struct {
 }
 
 type GetTaskDetailsArgs struct {
-	ExecutionID string `json:"execution_id" jsonschema:"description=The GORM UUID of the task execution to fetch details for"`
+	ExecutionID string  `json:"execution_id" jsonschema:"description=The GORM UUID of the task execution to fetch details for"`
+	Format      *string `json:"format,omitempty" jsonschema:"description=Optional format: 'a2ui' or 'raw'"`
+}
+
+type RawTaskListItem struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Status      string `json:"status"`
+	AssignedTo  string `json:"assigned_to"`
+	Priority    int    `json:"priority"`
+	Description string `json:"description"`
+}
+
+type RawTaskDetails struct {
+	ID         string        `json:"id"`
+	Title      string        `json:"title"`
+	Status     string        `json:"status"`
+	AssignedTo string        `json:"assigned_to"`
+	SiteID     string        `json:"site_id"`
+	Steps      []RawTaskStep `json:"steps"`
+}
+
+type RawTaskStep struct {
+	ID          string `json:"id"`
+	StepNumber  int    `json:"step"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Status      string `json:"status"`
+	Required    bool   `json:"required"`
+	X           int    `json:"x"`
+	Y           int    `json:"y"`
+	Layout      string `json:"layout"`
 }
 
 type GetSiteLocationsArgs struct {
@@ -468,6 +499,35 @@ func (h *MCPHandler) HandleGetTasks(ctx context.Context, args GetTasksArgs) (*mc
 		}
 
 		filteredQueue = append(filteredQueue, item)
+	}
+
+	// If the client explicitly requests raw JSON, map to RawTaskListItem and serialize!
+	if args.Format != nil && *args.Format == "raw" {
+		rawList := make([]RawTaskListItem, 0, len(filteredQueue))
+		for _, item := range filteredQueue {
+			assigneeName := ""
+			if item.AssigneeID != nil {
+				profile, err := h.shiftService.GetUserProfile(ctx, *item.AssigneeID)
+				if err == nil && profile != nil {
+					assigneeName = profile.Name
+				} else {
+					assigneeName = *item.AssigneeID
+				}
+			}
+			rawList = append(rawList, RawTaskListItem{
+				ID:          item.ID,
+				Title:       item.Task.Name,
+				Status:      item.Status,
+				AssignedTo:  assigneeName,
+				Priority:    item.Priority,
+				Description: item.Description,
+			})
+		}
+		rawBytes, err := json.Marshal(rawList)
+		if err != nil {
+			return nil, err
+		}
+		return mcp.NewToolResponse(mcp.NewTextContent(string(rawBytes))), nil
 	}
 
 	// If the client explicitly requests the pre-formatted A2UI card, bypass plain text!
@@ -806,7 +866,8 @@ func (h *MCPHandler) HandleGetUserContext(ctx context.Context, args GetUserConte
 }
 
 type ClaimTaskArgs struct {
-	ExecutionID string `json:"execution_id" jsonschema:"description=The GORM UUID of the task execution being claimed"`
+	ExecutionID string  `json:"execution_id" jsonschema:"description=The GORM UUID of the task execution being claimed"`
+	Format      *string `json:"format,omitempty" jsonschema:"description=Optional format: 'a2ui' or 'raw'"`
 }
 
 func (h *MCPHandler) HandleClaimTask(ctx context.Context, args ClaimTaskArgs) (*mcp.ToolResponse, error) {
@@ -831,13 +892,14 @@ func (h *MCPHandler) HandleClaimTask(ctx context.Context, args ClaimTaskArgs) (*
 	}
 
 	// Dynamic auto-refresh: Directly return the updated details card to save a round-trip
-	return h.HandleGetTaskDetails(ctx, GetTaskDetailsArgs{ExecutionID: args.ExecutionID})
+	return h.HandleGetTaskDetails(ctx, GetTaskDetailsArgs{ExecutionID: args.ExecutionID, Format: args.Format})
 }
 
 type UpdateTaskStatusArgs struct {
-	ExecutionID    string `json:"execution_id" jsonschema:"description=The GORM UUID of the task execution being updated"`
-	Status         string `json:"status" jsonschema:"description=The new status of the task execution (e.g. IN_PROGRESS, COMPLETED)"`
-	ChecklistState string `json:"checklist_state,omitempty" jsonschema:"description=Optional JSON string representing the updated checklist items state"`
+	ExecutionID    string  `json:"execution_id" jsonschema:"description=The GORM UUID of the task execution being updated"`
+	Status         string  `json:"status" jsonschema:"description=The new status of the task execution (e.g. IN_PROGRESS, COMPLETED)"`
+	ChecklistState string  `json:"checklist_state,omitempty" jsonschema:"description=Optional JSON string representing the updated checklist items state"`
+	Format         *string `json:"format,omitempty" jsonschema:"description=Optional format: 'a2ui' or 'raw'"`
 }
 
 func (h *MCPHandler) HandleUpdateTaskStatus(ctx context.Context, args UpdateTaskStatusArgs) (*mcp.ToolResponse, error) {
@@ -852,7 +914,7 @@ func (h *MCPHandler) HandleUpdateTaskStatus(ctx context.Context, args UpdateTask
 	}
 
 	// Dynamic auto-refresh: Directly return the updated details card to save a round-trip
-	return h.HandleGetTaskDetails(ctx, GetTaskDetailsArgs{ExecutionID: args.ExecutionID})
+	return h.HandleGetTaskDetails(ctx, GetTaskDetailsArgs{ExecutionID: args.ExecutionID, Format: args.Format})
 }
 
 type ListPendingTradesArgs struct{}
@@ -1190,6 +1252,144 @@ func (h *MCPHandler) HandleGetTaskDetails(ctx context.Context, args GetTaskDetai
 		if assigneeStr == "" {
 			assigneeStr = exec.Assignee.Email
 		}
+	}
+
+	if args.Format != nil && *args.Format == "raw" {
+		rawSteps := []RawTaskStep{}
+		for _, s := range steps {
+			title := s.Action
+			desc := "Checklist step execution."
+			xVal := 50
+			yVal := 50
+			layoutVal := "customer_service"
+			
+			// Enrich based on template
+			switch exec.TaskTemplateID {
+			case "d000fa44-0000-0000-0000-000000000000": // Register Open
+				if s.Step == 1 {
+					title = "Unlock Register Drawers"
+					desc = "Unlock terminal register drawers at checkout registers."
+					layoutVal = "register_1"
+					xVal = 140
+					yVal = 40
+				} else if s.Step == 2 {
+					title = "Verify Cash Vault"
+					desc = "Verify cash vault count matches system drop records."
+					layoutVal = "customer_service"
+					xVal = 60
+					yVal = 40
+				} else if s.Step == 3 {
+					title = "Receipt Thermal Roll"
+					desc = "Verify receipt thermal roll status on register terminals."
+					layoutVal = "register_3"
+					xVal = 200
+					yVal = 40
+				}
+			case "d000fa55-0000-0000-0000-000000000000": // Produce Freshness
+				if s.Step == 1 {
+					title = "Cull Spoiled Greens"
+					desc = "Cull wilted leafy greens and bruised fruits in produce aisle."
+					layoutVal = "aisle_1"
+					xVal = 70
+					yVal = 125
+				} else if s.Step == 2 {
+					title = "Log Chiller Temp"
+					desc = "Log displays chiller temperatures (Limits: 34F to 38F)."
+					layoutVal = "aisle_2"
+					xVal = 70
+					yVal = 175
+				} else if s.Step == 3 {
+					title = "Rotate Crates"
+					desc = "Rotate new stock crates behind older front-facing packages."
+					layoutVal = "aisle_3"
+					xVal = 70
+					yVal = 225
+				}
+			case "d000fa66-0000-0000-0000-000000000000": // Shelf Replenish
+				if s.Step == 1 {
+					title = "Locate Pallet Box"
+					desc = "Locate pallet backup count in Receiving Cage B."
+					layoutVal = "customer_service"
+					xVal = 60
+					yVal = 40
+				} else if s.Step == 2 {
+					title = "Transport Carton Pallet"
+					desc = "Use store jack to transport carton pallet to Aisle 2."
+					layoutVal = "aisle_2"
+					xVal = 70
+					yVal = 175
+				} else if s.Step == 3 {
+					title = "Stock Display Shelves"
+					desc = "Stock display shelves and face front items flush."
+					layoutVal = "apparel"
+					xVal = 200
+					yVal = 175
+				} else if s.Step == 4 {
+					title = "Scan Barcode Tag"
+					desc = "Scan display barcode tag using handset to sign off."
+					layoutVal = "electronics"
+					xVal = 320
+					yVal = 175
+				}
+			case "d000fa77-0000-0000-0000-000000000000": // Showroom Refresh
+				if s.Step == 1 {
+					title = "Wipe Down Displays"
+					desc = "Wipe down display cooktops and refrigerators."
+					layoutVal = "apparel"
+					xVal = 200
+					yVal = 175
+				} else if s.Step == 2 {
+					title = "Verify Demos Online"
+					desc = "Verify interactive tablet demos are online and responsive."
+					layoutVal = "electronics"
+					xVal = 320
+					yVal = 175
+				} else if s.Step == 3 {
+					title = "Check Promo Tags"
+					desc = "Ensure price tags and feature sheets match current promos."
+					layoutVal = "electronics"
+					xVal = 320
+					yVal = 175
+				}
+			}
+			
+			status := s.Status
+			if status == "" {
+				status = "PENDING"
+				if s.Completed {
+					status = "COMPLETED"
+				}
+			}
+
+			rawSteps = append(rawSteps, RawTaskStep{
+				ID:          fmt.Sprintf("step_%d", s.Step),
+				StepNumber:  s.Step,
+				Title:       title,
+				Description: desc,
+				Status:      status,
+				Required:    s.Required,
+				X:           xVal,
+				Y:           yVal,
+				Layout:      layoutVal,
+			})
+		}
+		
+		storeName := "Storefront Location"
+		if exec.Task.Name != "" {
+			storeName = exec.Task.Name
+		}
+		
+		rawDetails := RawTaskDetails{
+			ID:         exec.ID,
+			Title:      storeName,
+			Status:     exec.Status,
+			AssignedTo: assigneeStr,
+			SiteID:     exec.EventInstanceID,
+			Steps:      rawSteps,
+		}
+		
+		rawJSON, _ := json.Marshal(rawDetails)
+		return mcp.NewToolResponse(mcp.NewTextContent(string(rawJSON))), nil
 	}
 
 	// Build the A2UI Card

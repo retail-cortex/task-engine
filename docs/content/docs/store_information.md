@@ -15,22 +15,28 @@ To test enterprise role-based access controls (RBAC), multi-store operational ov
 
 Parent and child OUs are organized operationally:
 
-```text
-rmcguinness.altostrat.com (Root Domain)
-└── Stores (Parent OU)
-    ├── Regional Managers (Contains active Regional Director profiles)
-    ├── Volt & Vine - Seattle (Store Footprint OU)
-    │   ├── Admins
-    │   ├── Managers
-    │   ├── Cashiers
-    │   ├── Associates
-    │   └── Vault
-    ├── Volt & Vine - San Francisco (Store Footprint OU)
-    │   ├── Admins
-    │   └── ...
-    └── OmniMart - Store #1000 (Dallas)
-        ├── Admins
-        └── ...
+```mermaid
+graph TD
+    Root["retail.altostrat.com<br/>(Root Domain)"]
+    Stores["Stores<br/>(Parent OU)"]
+    Regional["Regional Managers<br/>(Regional Directors)"]
+    Store1["Volt & Vine - Seattle<br/>(Store Footprint OU)"]
+    Store2["Volt & Vine - San Francisco<br/>(Store Footprint OU)"]
+    Store3["OmniMart - Store #1000<br/>(Dallas Store Footprint OU)"]
+
+    SubRoles1["Admins | Managers | Cashiers | Associates | Vault"]
+    SubRoles2["Admins | Managers | Cashiers | Associates | Vault"]
+    SubRoles3["Admins | Managers | Cashiers | Associates | Vault"]
+
+    Root --> Stores
+    Stores --> Regional
+    Stores --> Store1
+    Stores --> Store2
+    Stores --> Store3
+
+    Store1 --> SubRoles1
+    Store2 --> SubRoles2
+    Store3 --> SubRoles3
 ```
 
 ---
@@ -40,21 +46,21 @@ rmcguinness.altostrat.com (Root Domain)
 The sandbox Workspace directory has been provisioned to support **553 role profiles** spanning **109 physical storefront locations** and **4 regional managers**.
 
 ### User Account Naming Conventions
-* **Store Level Users:** `{role_slug}-{store_slug}@rmcguinness.altostrat.com`
-* **Regional Managers:** `regional-manager-{region_slug}@rmcguinness.altostrat.com`
-* **Initial Passwords Registry:** All temporary credentials and initial login passwords are cataloged inside the secure, git-ignored file [passwords_registry.csv](../../scripts/terraform/passwords_registry.csv).
+* **Store Level Users:** `{role_slug}-{store_slug}@retail.altostrat.com`
+* **Regional Managers:** `regional-manager-{region_slug}@retail.altostrat.com`
+* **Initial Passwords Registry:** All temporary credentials and initial login passwords are cataloged inside the secure, git-ignored file `passwords_registry.csv`.
 
 ### Active Regional Directors Mapping
 Due to sandbox limitations, the **6 retail regions** are mapped to the **4 active regional profiles** inside the core Workspace directory to prevent authentication constraints:
 
 | Retail Footprint Region | Active Workspace Manager Account | Scopes & Responsibilities |
 | :--- | :--- | :--- |
-| `northeast` | `regional-manager-northeast@rmcguinness.altostrat.com` | Northeast Footprint |
-| `southeast` | `regional-manager-southeast@rmcguinness.altostrat.com` | Southeast Footprint |
-| `northwest` | `regional-manager-west@rmcguinness.altostrat.com` | Pacific Northwest Footprint |
-| `southwest` | `regional-manager-west@rmcguinness.altostrat.com` | Pacific Southwest Footprint |
-| `northcentral` | `regional-manager-midwest@rmcguinness.altostrat.com` | Northcentral Footprint |
-| `southcentral` | `regional-manager-midwest@rmcguinness.altostrat.com` | Southcentral Footprint |
+| `northeast` | `regional-manager-northeast@retail.altostrat.com` | Northeast Footprint |
+| `southeast` | `regional-manager-southeast@retail.altostrat.com` | Southeast Footprint |
+| `northwest` | `regional-manager-west@retail.altostrat.com` | Pacific Northwest Footprint |
+| `southwest` | `regional-manager-west@retail.altostrat.com` | Pacific Southwest Footprint |
+| `northcentral` | `regional-manager-midwest@retail.altostrat.com` | Northcentral Footprint |
+| `southcentral` | `regional-manager-midwest@retail.altostrat.com` | Southcentral Footprint |
 
 ---
 

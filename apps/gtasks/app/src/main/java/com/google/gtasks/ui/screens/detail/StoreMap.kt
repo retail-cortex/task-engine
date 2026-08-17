@@ -1,3 +1,17 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package com.google.gtasks.ui.screens.detail
 
 import androidx.compose.animation.core.*
@@ -47,7 +61,7 @@ fun getStoreLayout(siteId: String): StoreLayout {
  * Resolves the location name from a task title.
  */
 fun resolveLocationName(taskName: String): String {
-    val name = taskName.toLowerCase()
+    val name = taskName.lowercase();
     return when {
         name.includes("aisle 7") -> "Aisle 7"
         name.includes("aisle 8") -> "Aisle 8"
@@ -74,7 +88,7 @@ private fun String.includes(substring: String): Boolean = this.contains(substrin
  * Translates location name and store layout to the SVG blueprint coordinate grid (0..200 x 0..150).
  */
 fun getFocalCoordinates(locationName: String, layout: StoreLayout): Offset? {
-    val name = locationName.toLowerCase()
+    val name = locationName.lowercase();
     return when (layout) {
         StoreLayout.BOUTIQUE -> when {
             name.includes("loading") -> Offset(16f, 25f)
@@ -197,17 +211,18 @@ fun StoreMapDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(4f / 3f) // Standard 4:3 aspect ratio matching the 200x150 blueprint
-                        .background(Color(0xFF03050C), RoundedCornerShape(12.dp))
+                        .background(GTasksTheme.colors.bgInput, RoundedCornerShape(12.dp))
                         .border(1.dp, GTasksTheme.colors.borderMuted, RoundedCornerShape(12.dp))
                         .padding(12.dp)
                 ) {
+                    val primaryColor = GTasksTheme.colors.colorPrimary
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val scaleX = size.width / 200f
                         val scaleY = size.height / 150f
 
                         // Draw outer dashed bounds
                         drawRoundRect(
-                            color = Color(0x336366F1),
+                            color = primaryColor.copy(alpha = 0.2f),
                             topLeft = Offset(2f * scaleX, 2f * scaleY),
                             size = Size(196f * scaleX, 146f * scaleY),
                             cornerRadius = CornerRadius(3f * scaleX),
@@ -367,7 +382,8 @@ private fun DrawScope.drawFixture(
     x: Float, y: Float, w: Float, h: Float,
     label: String,
     scaleX: Float, scaleY: Float,
-    isDashed: Boolean = false
+    isDashed: Boolean = false,
+    fixtureColor: Color = Color(0xFF0071CE)
 ) {
     val tx = x * scaleX
     val ty = y * scaleY
@@ -376,7 +392,7 @@ private fun DrawScope.drawFixture(
 
     // 1. Draw Semi-translucent Fill
     drawRoundRect(
-        color = Color(0x126366F1), // Very light Indigo
+        color = fixtureColor.copy(alpha = 0.07f),
         topLeft = Offset(tx, ty),
         size = Size(tw, th),
         cornerRadius = CornerRadius(2f * scaleX)
@@ -384,7 +400,7 @@ private fun DrawScope.drawFixture(
 
     // 2. Draw Sleek Neon Border
     drawRoundRect(
-        color = Color(0x556366F1), // Medium Indigo
+        color = fixtureColor.copy(alpha = 0.33f),
         topLeft = Offset(tx, ty),
         size = Size(tw, th),
         cornerRadius = CornerRadius(2f * scaleX),
@@ -398,7 +414,8 @@ private fun DrawScope.drawFixture(
 private fun DrawScope.drawCircleFixture(
     cx: Float, cy: Float, r: Float,
     label: String,
-    scaleX: Float, scaleY: Float
+    scaleX: Float, scaleY: Float,
+    fixtureColor: Color = Color(0xFF0071CE)
 ) {
     val tcx = cx * scaleX
     val tcy = cy * scaleY
@@ -406,14 +423,14 @@ private fun DrawScope.drawCircleFixture(
 
     // Fill
     drawCircle(
-        color = Color(0x126366F1),
+        color = fixtureColor.copy(alpha = 0.07f),
         radius = tr,
         center = Offset(tcx, tcy)
     )
 
     // Border
     drawCircle(
-        color = Color(0x556366F1),
+        color = fixtureColor.copy(alpha = 0.33f),
         radius = tr,
         center = Offset(tcx, tcy),
         style = Stroke(width = 0.8f.dp.toPx())

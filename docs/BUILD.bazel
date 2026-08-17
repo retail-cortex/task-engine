@@ -13,6 +13,7 @@
 # limitations under the License.
 
 load("@rules_hugo//hugo:rules.bzl", "hugo_serve", "hugo_site", "hugo_theme")
+load("@rules_python//python:defs.bzl", "py_binary")
 
 # Reference static assets from loaded Hugo Book theme
 hugo_theme(
@@ -35,4 +36,25 @@ hugo_site(
 hugo_serve(
     name = "serve",
     dep = [":site"],
+)
+
+# Single-page documentation generator binary
+py_binary(
+    name = "generate_single_page",
+    srcs = ["generate_single_page.py"],
+    data = glob(["content/**/*"]),
+    main = "generate_single_page.py",
+)
+
+# Hermetic single-page documentation, HTML studio, and LLM context bundle
+genrule(
+    name = "bundle",
+    srcs = glob(["content/**/*"]),
+    outs = [
+        "docs_bundle.md",
+        "docs_single_page.html",
+        "llms-full.txt",
+    ],
+    cmd = "$(location :generate_single_page) --content-dir docs/content --output-md $(location docs_bundle.md) --output-html $(location docs_single_page.html) --output-llm $(location llms-full.txt)",
+    tools = [":generate_single_page"],
 )
