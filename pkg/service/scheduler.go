@@ -345,6 +345,8 @@ func (s *schedulerService) SetNodeID(id string) {
 }
 
 func (s *schedulerService) SetLeader(isLeader bool) {
+	s.statusMutex.Lock()
+	defer s.statusMutex.Unlock()
 	s.isLeader = isLeader
 }
 

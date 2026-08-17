@@ -17,6 +17,7 @@ package agents
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -89,6 +90,7 @@ func (s *sessionService) ClearSession(ctx context.Context, sessionID string) err
 }
 
 type inMemorySessionService struct {
+	mu       sync.RWMutex
 	sessions map[string]*AgentSessionState
 }
 
@@ -102,8 +104,17 @@ func (s *inMemorySessionService) GetOrCreateSession(ctx context.Context, session
 		return nil, errors.New("sessionID, agentID, and userID are mandatory parameters")
 	}
 
+	s.mu.RLock()
 	sess, ok := s.sessions[sessionID]
+	s.mu.RUnlock()
 	if ok {
+		return sess, nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// Double-check lock
+	if sess, ok := s.sessions[sessionID]; ok {
 		return sess, nil
 	}
 
@@ -119,11 +130,15 @@ func (s *inMemorySessionService) GetOrCreateSession(ctx context.Context, session
 }
 
 func (s *inMemorySessionService) SaveSession(ctx context.Context, session *AgentSessionState) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.sessions[session.SessionID] = session
 	return nil
 }
 
 func (s *inMemorySessionService) ClearSession(ctx context.Context, sessionID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	delete(s.sessions, sessionID)
 	return nil
 }
